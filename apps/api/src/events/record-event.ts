@@ -52,3 +52,30 @@ export async function recordEvent(client: PoolClient, event: NewBusinessEvent): 
 
   return { eventId };
 }
+
+/**
+ * Appends many events in one statement (bulk registration of a few hundred cylinders).
+ * Same rules as recordEvent: call inside withTenant(); no outbox rows are written here.
+ */
+export async function recordEvents(
+  client: PoolClient,
+  events: readonly Omit<NewBusinessEvent, 'outboxTopics'>[],
+): Promise<void> {
+  if (events.length === 0) return;
+  await client.query(
+    `INSERT INTO business_events
+       (tenant_id, event_type, aggregate_type, aggregate_id, payload, actor_id, device_id, occurred_at)
+     SELECT current_tenant_id(), e.type, e.aggregate_type, e.aggregate_id, e.payload::jsonb, e.actor_id, e.device_id, e.occurred_at
+     FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::uuid[], $6::uuid[], $7::timestamptz[])
+       AS e(type, aggregate_type, aggregate_id, payload, actor_id, device_id, occurred_at)`,
+    [
+      events.map((e) => e.type),
+      events.map((e) => e.aggregateType),
+      events.map((e) => e.aggregateId),
+      events.map((e) => JSON.stringify(e.payload)),
+      events.map((e) => e.actorId ?? null),
+      events.map((e) => e.deviceId ?? null),
+      events.map((e) => e.occurredAt),
+    ],
+  );
+}

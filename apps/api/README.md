@@ -40,6 +40,29 @@ echo "the-admin-password" | corepack pnpm provision --name "Acme Gas Ltd" --code
 ```
 Or run it without `echo` and type the password when asked. Uses `DATABASE_MIGRATION_URL`.
 
+## Cylinders, tags and scan sessions (Step 3)
+- `migrations/0003_items.sql`: the tracked-item core (`tracked_items`, ADR 0004) with cylinders as the first type;
+  RFID tags (`item_tags`: a tag number belongs to one item forever and a retired tag never comes back, enforced by a
+  trigger); the restricted `item_security` dimension in its own table; `cylinder_sizes`; `tenant_settings` (retest
+  interval); and `scan_sessions` / `scan_batches` / `scan_reads` (raw reads, append-only).
+- New organisations start with 6, 13 and 50 kg sizes; the owner adds or retires sizes.
+- Safety (eligible / test due / overdue / quarantined / condemned) is worked out on read from the test dates, the
+  organisation's interval and any hold, because time changes it. An unknown test date counts as due and blocks a full dispatch.
+- A scan never changes a cylinder's state. Step 4 (handovers) uses the reviewed session list.
+- Routes marked `anyLocation` only check the permission is held somewhere; the service then checks it at the record's
+  location (`src/access/require-at.ts`).
+
+| Endpoint | Who |
+|---|---|
+| `GET /cylinder-settings` | `settings.manage`, `item.register` or `item.view_position` |
+| `PUT /cylinder-settings/retest-interval {months \| null}`, `POST /cylinder-settings/sizes {name, nominalFillKg}`, `POST /cylinder-settings/sizes/:id/retire` | `settings.manage` |
+| `POST /cylinders` (one) / `POST /cylinders/import` (up to 500, all or nothing, problems reported per row) | `item.register` at `locationId` |
+| `GET /cylinders?locationId&sizeId&physicalState&safety&search&limit&offset` | `item.view_position` or `item.register` there (organisation-wide without `locationId`) |
+| `GET /cylinders/:id`, `GET /cylinders/by-tag/:epc` (any tag it ever had) | the same, at the cylinder's location |
+| `POST /cylinders/:id/tag {epc, reason}` | `item.replace_tag` at the cylinder's location |
+| `POST /scan-sessions {purpose, locationId}`, `POST /scan-sessions/:id/reads {batchId, reads}`, `POST /scan-sessions/:id/close` | the purpose's permission at the location (registration `item.register`, dispatch `dispatch.scan`, stocktake `stocktake.perform`, audit `audit.perform`). Only the device that opened it sends reads; a repeated `batchId` is ignored |
+| `GET /scan-sessions`, `GET /scan-sessions/:id` (reads merged per tag, matched to cylinders) | the purpose's permission or cylinder viewing, at the location |
+
 ## Development database (on the VPS)
 Development and integration tests use the PostgreSQL 16 + PostGIS 3.4 server on the VPS, which also hosts
 the live telematics app. Don't run Docker locally. Database names and logins all start with `lpg_` so they

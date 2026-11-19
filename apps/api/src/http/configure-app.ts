@@ -7,6 +7,7 @@ export function configureApp(app: NestExpressApplication): void {
   // Caddy on the same machine terminates TLS; trust it (and only it) for the client address.
   app.set('trust proxy', 'loopback');
   app.use(securityHeaders);
-  app.useBodyParser('json', { limit: '100kb' });
+  // Big enough for a 500-cylinder import or a 500-read batch (each well under 200 kB), small enough to stay cheap.
+  app.useBodyParser('json', { limit: '512kb' });
   app.enableShutdownHooks();
 }

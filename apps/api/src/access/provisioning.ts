@@ -1,4 +1,4 @@
-import { checkPassword, normalizeKenyanPhone } from '@ilacore/domain';
+import { checkPassword, DEFAULT_CYLINDER_SIZES, normalizeKenyanPhone } from '@ilacore/domain';
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { withTenant } from '../db/tenant-transaction.js';
@@ -46,6 +46,14 @@ export async function provisionOrganisation(owner: Pool, input: ProvisionInput):
       `INSERT INTO role_assignments (tenant_id, user_id, role) VALUES (current_tenant_id(), $1, 'administrator')`,
       [adminId],
     );
+    // Settings start unset; sizes start with the defaults and the owner adds more.
+    await c.query('INSERT INTO tenant_settings (tenant_id) VALUES (current_tenant_id())');
+    for (const size of DEFAULT_CYLINDER_SIZES) {
+      await c.query(
+        'INSERT INTO cylinder_sizes (tenant_id, name, nominal_fill_kg) VALUES (current_tenant_id(), $1, $2)',
+        [size.name, size.nominalFillKg],
+      );
+    }
     await recordAudit(c, { action: 'organisation.provisioned', targetType: 'user', targetId: adminId, details: { slug } });
     return { tenantId, adminId };
   });

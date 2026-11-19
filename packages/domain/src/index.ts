@@ -7,3 +7,5 @@ export * from './phone.js';
 export * from './credentials.js';
 export * from './roles.js';
 export * from './separation.js';
+export * from './cylinder.js';
+export * from './scan.js';

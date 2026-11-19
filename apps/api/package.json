@@ -25,6 +25,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@ilacore/reader-sim": "workspace:*",
     "@nestjs/testing": "12.5.1",
     "@testcontainers/postgresql": "12.2.1",
     "@types/express": "5.0.3",

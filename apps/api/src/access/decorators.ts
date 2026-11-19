@@ -20,6 +20,12 @@ export interface PermissionRequirement {
   readonly anyOf: readonly Permission[];
   /** Reads the location the action applies to, when the permission is location-scoped. */
   readonly location?: (req: Request) => string | undefined;
+  /**
+   * The location is only known once the record is loaded (a cylinder's own page, a scan session).
+   * The guard then only checks the permission is held somewhere; the service MUST check it at the
+   * record's location with requireAt() before revealing or changing anything.
+   */
+  readonly anyLocation?: true;
 }
 
 export const Public = () => SetMetadata(PUBLIC_KEY, true);
@@ -27,11 +33,12 @@ export const SignedIn = () => SetMetadata(SIGNED_IN_KEY, true);
 export const AllowIncompleteSignIn = () => SetMetadata(INCOMPLETE_KEY, true);
 export const RequirePermission = (
   permission: Permission | readonly Permission[],
-  options: { location?: (req: Request) => string | undefined } = {},
+  options: { location?: (req: Request) => string | undefined; anyLocation?: true } = {},
 ) =>
   SetMetadata(PERMISSION_KEY, {
     anyOf: typeof permission === 'string' ? [permission] : permission,
     ...(options.location ? { location: options.location } : {}),
+    ...(options.anyLocation ? { anyLocation: true } : {}),
   } satisfies PermissionRequirement);
 
 const contexts = new WeakMap<Request, AuthContext>();

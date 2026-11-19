@@ -1,6 +1,6 @@
 import { HttpStatus, Inject, Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { can, MFA_REQUIRED } from '@ilacore/domain';
+import { can, MFA_REQUIRED, permissionsOf } from '@ilacore/domain';
 import type { Request } from 'express';
 import { nextStep, type AuthContext } from '../identity/auth-context.js';
 import { apiError } from '../identity/errors.js';
@@ -55,8 +55,11 @@ export class AccessGuard implements CanActivate {
 
   private allows(ctx: AuthContext, requirement: PermissionRequirement, req: Request): boolean {
     const location = requirement.location?.(req);
+    const held = requirement.anyLocation ? permissionsOf(ctx.assignments) : null;
     return requirement.anyOf.some(
-      (p) => !(ctx.channel === 'device' && MFA_REQUIRED.has(p)) && can(ctx.assignments, p, location),
+      (p) =>
+        !(ctx.channel === 'device' && MFA_REQUIRED.has(p)) &&
+        (held ? held.has(p) : can(ctx.assignments, p, location)),
     );
   }
 }

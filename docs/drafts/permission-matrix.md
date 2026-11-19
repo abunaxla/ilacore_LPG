@@ -53,7 +53,7 @@ Every grant is scoped to an organisation and, where it applies, a location.
 | Owner / Director | All `report.*`, `item.view_position`, `loss.cancel`, `settings.manage` |
 | Senior manager | `credit.approve`, `loss.cancel`, `report.*` |
 | Finance | `credit.approve`, `account.stop`, `ledger.*`, `period.close`, `loss.resolve`, `customer.change_phone`, `report.finance` |
-| Depot supervisor | `dispatch.approve_exception`, `handover.approve_exception`, `route.settle`, `stocktake.finalise` |
+| Depot supervisor | `dispatch.approve_exception`, `handover.approve_exception`, `route.settle`, `stocktake.finalise`, `item.register`, `item.replace_tag`, `item.view_position` (the three `item.*` added provisionally on 20 Nov 2026, to confirm) |
 | Loader | `dispatch.scan` |
 | Filling / QC operator | `filling.record`, `qc.record` |
 | Driver | `handover.perform` |

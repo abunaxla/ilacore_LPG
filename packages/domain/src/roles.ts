@@ -36,7 +36,11 @@ export const ROLES = {
   },
   depot_supervisor: {
     label: 'Depot supervisor',
-    permissions: ['dispatch.approve_exception', 'handover.approve_exception', 'route.settle', 'stocktake.finalise'],
+    permissions: [
+      'dispatch.approve_exception', 'handover.approve_exception', 'route.settle', 'stocktake.finalise',
+      // Provisional (20 Nov 2026): no role held the item permissions; to be confirmed with the owner.
+      'item.register', 'item.replace_tag', 'item.view_position',
+    ],
     channel: 'web_and_device',
   },
   loader: { label: 'Loader', permissions: ['dispatch.scan'], channel: 'device' },
