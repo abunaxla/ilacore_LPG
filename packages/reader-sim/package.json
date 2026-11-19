@@ -1,0 +1,7 @@
+{
+  "name": "@ilacore/reader-sim",
+  "version": "0.0.0",
+  "private": true,
+  "description": "RFID reader simulator behind the common reader interface",
+  "scripts": {}
+}

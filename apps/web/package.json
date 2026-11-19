@@ -1,0 +1,7 @@
+{
+  "name": "@ilacore/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Next.js web app: role-based dashboards and screens for every user type",
+  "scripts": {}
+}
