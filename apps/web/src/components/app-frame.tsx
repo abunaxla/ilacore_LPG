@@ -10,6 +10,13 @@ export function AppFrame({ me, title, children }: { me: Me; title: string; child
   const t = getMessages();
   const links = [
     { href: '/', label: t.app.home, show: true },
+    { href: '/cylinders', label: t.cylinders.nav, show: hasAny(me, ['item.view_position', 'item.register']) },
+    {
+      href: '/scans',
+      label: t.scans.nav,
+      show: hasAny(me, ['item.view_position', 'item.register', 'dispatch.scan', 'stocktake.perform', 'audit.perform']),
+    },
+    { href: '/settings/cylinders', label: t.cylinderSettings.nav, show: hasAny(me, ['settings.manage']) },
     { href: '/admin/users', label: t.admin.users, show: hasAny(me, ['user.manage']) },
     { href: '/admin/devices', label: t.admin.devices, show: hasAny(me, ['device.manage']) },
     { href: '/admin/locations', label: t.admin.locations, show: hasAny(me, ['settings.manage', 'user.manage', 'device.manage']) },

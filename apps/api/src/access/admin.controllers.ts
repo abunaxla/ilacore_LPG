@@ -111,8 +111,12 @@ export class DevicesController {
 export class LocationsController {
   constructor(@Inject(LocationsService) private readonly locations: LocationsService) {}
 
+  /** Names of places are not sensitive; anyone who manages people, devices or cylinders, anywhere, may read them. */
   @Get()
-  @RequirePermission(['settings.manage', 'user.manage', 'device.manage'])
+  @RequirePermission(
+    ['settings.manage', 'user.manage', 'device.manage', 'item.register', 'item.view_position', 'dispatch.scan', 'stocktake.perform', 'audit.perform'],
+    { anyLocation: true },
+  )
   list(@Auth() ctx: AuthContext) {
     return this.locations.list(ctx);
   }

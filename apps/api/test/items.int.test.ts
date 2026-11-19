@@ -184,6 +184,12 @@ describe('cylinder sizes and settings', () => {
     expect((r.body.sizes as { name: string; retired: boolean }[]).find((s) => s.name === '22.5 kg')?.retired).toBe(true);
   });
 
+  it('lets people who work with cylinders read the location names', async () => {
+    const r = await call('GET', '/locations', { cookie: supervisorCookie });
+    expect(r.status).toBe(200);
+    expect((r.body as unknown as { name: string }[]).map((l) => l.name)).toEqual(['Eldoret depot', 'Nakuru depot']);
+  });
+
   it('only lets the owner change settings', async () => {
     expect((await call('PUT', '/cylinder-settings/retest-interval', { cookie: supervisorCookie, body: { months: 60 } })).status).toBe(403);
     expect((await call('POST', '/cylinder-settings/sizes', { cookie: supervisorCookie, body: { name: '9 kg', nominalFillKg: 9 } })).status).toBe(403);

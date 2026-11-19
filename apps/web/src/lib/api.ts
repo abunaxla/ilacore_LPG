@@ -18,7 +18,7 @@ export interface ApiReply<T> {
 
 export async function api<T = Record<string, unknown>>(
   path: string,
-  options: { method?: 'GET' | 'POST'; body?: unknown; token?: string | undefined } = {},
+  options: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; token?: string | undefined } = {},
 ): Promise<ApiReply<T>> {
   const incoming = await headers();
   const outgoing: Record<string, string> = { accept: 'application/json' };
