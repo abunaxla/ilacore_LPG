@@ -11,8 +11,37 @@ import { parseArgs } from 'node:util';
 import { Pool } from 'pg';
 import { provisionOrganisation } from './provisioning.js';
 
+/** Reads a line from the keyboard without showing it. Backspace works; Ctrl+C cancels. */
+function readHidden(prompt: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stdin = process.stdin;
+    process.stdout.write(prompt);
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding('utf8');
+    let value = '';
+    const done = (error?: Error) => {
+      stdin.setRawMode(false);
+      stdin.pause();
+      stdin.removeListener('data', onData);
+      process.stdout.write('\n');
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const onData = (chunk: string) => {
+      for (const ch of chunk) {
+        if (ch === '\r' || ch === '\n') return done();
+        if (ch === '\u0003') return done(new Error('Cancelled'));
+        if (ch === '\u0008' || ch === '\u007f') value = value.slice(0, -1);
+        else if (ch >= ' ') value += ch;
+      }
+    };
+    stdin.on('data', onData);
+  });
+}
+
 async function readPassword(): Promise<string> {
-  if (process.stdin.isTTY) process.stdout.write('Administrator password (12+ characters): ');
+  if (process.stdin.isTTY) return (await readHidden('Administrator password (12+ characters, not shown): ')).trim();
   const rl = createInterface({ input: process.stdin, terminal: false });
   for await (const line of rl) {
     rl.close();

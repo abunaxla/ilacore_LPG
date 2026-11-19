@@ -56,7 +56,7 @@ export class AuthController {
       path: '/',
       expires: result.expiresAt,
     });
-    return { next: result.next, displayName: result.displayName };
+    return { next: result.next, displayName: result.displayName, expiresAt: result.expiresAt };
   }
 
   /** Handhelds send their device credential as `Authorization: Device <credential>` and get a bearer token. */
