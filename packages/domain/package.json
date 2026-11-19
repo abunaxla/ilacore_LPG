@@ -2,6 +2,24 @@
   "name": "@ilacore/domain",
   "version": "0.0.0",
   "private": true,
-  "description": "Shared types, state models and pure rules (balanced handover, liability, pricing)",
-  "scripts": {}
+  "description": "Shared types, state models and pure rules (balanced handover, money, permissions)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
 }

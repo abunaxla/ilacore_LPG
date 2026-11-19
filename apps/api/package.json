@@ -3,5 +3,31 @@
   "version": "0.0.0",
   "private": true,
   "description": "NestJS API: the modular monolith that holds all business rules",
-  "scripts": {}
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node --env-file-if-exists=.env dist/main.js",
+    "test": "vitest run",
+    "test:int": "vitest run -c vitest.int.config.ts",
+    "migrate": "node --env-file-if-exists=.env dist/db/migrate-cli.js"
+  },
+  "dependencies": {
+    "@ilacore/domain": "workspace:*",
+    "@nestjs/common": "12.5.1",
+    "@nestjs/core": "12.5.1",
+    "@nestjs/platform-express": "12.5.1",
+    "drizzle-orm": "0.45.4",
+    "pg": "8.23.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "12.5.1",
+    "@testcontainers/postgresql": "12.2.1",
+    "@types/node": "^24.19.2",
+    "@types/pg": "8.23.1",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
 }

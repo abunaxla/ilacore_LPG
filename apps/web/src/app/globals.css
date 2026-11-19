@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens. Contrast is chosen for WCAG 2.2 AA and for reading in sunlight:
+ * body text well above 7:1, borders at least 3:1. Status is never shown by colour alone.
+ * System fonts only: no font downloads, so screens load fast on weak mobile networks.
+ */
+:root {
+  --background: #ffffff;
+  --foreground: #111111;
+  --focus: #0047ab;
+  --min-target: 44px;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0b0b0b;
+    --foreground: #f5f5f5;
+    --focus: #7fb2ff;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+
+/* A visible focus ring on everything that can take focus (WCAG 2.4.7 / 2.4.11). */
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Large touch targets for field use, including with gloves (WCAG 2.5.8 needs 24px; we use 44px). */
+button,
+[role="button"],
+input,
+select,
+textarea,
+a.button {
+  min-height: var(--min-target);
+}
+
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -100px;
+  padding: 0.75rem 1rem;
+  background: var(--foreground);
+  color: var(--background);
+  z-index: 50;
+}
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

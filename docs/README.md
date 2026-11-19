@@ -26,3 +26,4 @@ Start with **[agreed-decisions](agreed-decisions.md)**. It is the single summary
 ## Other
 - [Diagrams](diagrams/README.md)
 - [Open questions](open-questions.md)
+- [Threat model](security/threat-model.md)
