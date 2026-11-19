@@ -22,6 +22,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
-      # Integration tests use Testcontainers; Docker is available on GitHub-hosted Linux runners.
+      # Integration tests: with TEST_ADMIN_DATABASE_URL unset, Testcontainers starts PostgreSQL 16 + PostGIS 3.4
+      # (matching the VPS). Docker is available on GitHub-hosted Linux runners.
       - run: pnpm --filter @ilacore/api test:int
       - run: pnpm build

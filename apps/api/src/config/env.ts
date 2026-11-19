@@ -7,7 +7,7 @@ import { z } from 'zod';
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
-  /** Connection for the application: a login role that is a member of ilacore_app, never a superuser. */
+  /** Connection for the application: a login role that is a member of lpg_app, never a superuser. */
   DATABASE_URL: z.url(),
   /** Connection used only to run migrations (schema owner). */
   DATABASE_MIGRATION_URL: z.url().optional(),

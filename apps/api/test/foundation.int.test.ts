@@ -1,5 +1,6 @@
 /**
- * Integration tests for the database foundation, against a real PostgreSQL + PostGIS in Docker.
+ * Integration tests for the database foundation, against a real, throwaway PostgreSQL + PostGIS
+ * database (see support/test-database.ts).
  * They prove the guarantees the rest of the system relies on:
  *   - tenant isolation is enforced by the database (row-level security)
  *   - with no tenant set, nothing is visible and nothing can be written
@@ -7,49 +8,47 @@
  *   - an event and its outbox rows commit or roll back together
  *   - applied migrations can't be silently changed
  */
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { migrate, MigrationChecksumError } from '../src/db/migrate.js';
 import { withTenant } from '../src/db/tenant-transaction.js';
 import { recordAudit } from '../src/events/record-audit.js';
 import { recordEvent } from '../src/events/record-event.js';
+import { startTestDatabase, type TestDatabase } from './support/test-database.js';
 
 const MIGRATIONS = join(__dirname, '..', 'migrations');
-// Throwaway credential for the disposable test container only.
-const APP_LOGIN_PASSWORD = 'test-only-password';
 
-let container: StartedPostgreSqlContainer;
+let db: TestDatabase;
 let owner: Pool;
 let app: Pool;
 let tenantA: string;
 let tenantB: string;
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgis/postgis:17-3.5').start();
-  owner = new Pool({ connectionString: container.getConnectionUri(), max: 2 });
+  db = await startTestDatabase();
+  owner = new Pool({ connectionString: db.ownerUrl, max: 2 });
   await migrate(owner, MIGRATIONS);
 
-  await owner.query(`CREATE ROLE app_login LOGIN PASSWORD '${APP_LOGIN_PASSWORD}' IN ROLE ilacore_app`);
-  const tenants = await owner.query<{ id: string }>(
-    "INSERT INTO tenants (name) VALUES ('Distributor A'), ('Distributor B') RETURNING id",
-  );
-  tenantA = tenants.rows[0]!.id;
-  tenantB = tenants.rows[1]!.id;
+  // Row-level security is forced even for the schema owner, so a tenant is provisioned inside its own scope.
+  const provision = async (name: string) => {
+    const id = randomUUID();
+    await withTenant(owner, id, (c) => c.query('INSERT INTO tenants (id, name) VALUES ($1, $2)', [id, name]));
+    return id;
+  };
+  tenantA = await provision('Distributor A');
+  tenantB = await provision('Distributor B');
 
-  const url = new URL(container.getConnectionUri());
-  url.username = 'app_login';
-  url.password = APP_LOGIN_PASSWORD;
-  app = new Pool({ connectionString: url.toString(), max: 4 });
+  app = new Pool({ connectionString: await db.createAppLogin(), max: 4 });
 }, 180_000);
 
 afterAll(async () => {
   await app?.end();
   await owner?.end();
-  await container?.stop();
+  await db?.dispose();
 });
 
 const sampleEvent = (aggregateId: string) => ({
@@ -113,10 +112,15 @@ describe('append-only ledgers', () => {
   });
 
   it('rejects updates, deletes and truncation even by the table owner', async () => {
-    // Row-level protection fires per row, so make sure there are rows to protect.
+    // Row-level protection fires per row, so make sure there are rows to protect, and look at them
+    // from inside the tenant (row-level security is forced for the owner too).
     await withTenant(app, tenantA, (c) => recordAudit(c, { action: 'owner.delete_probe' }));
-    await expect(owner.query("UPDATE business_events SET aggregate_id = 'changed'")).rejects.toThrow(/append-only/);
-    await expect(owner.query('DELETE FROM audit_log')).rejects.toThrow(/append-only/);
+    await expect(
+      withTenant(owner, tenantA, (c) => c.query("UPDATE business_events SET aggregate_id = 'changed'")),
+    ).rejects.toThrow(/append-only/);
+    await expect(withTenant(owner, tenantA, (c) => c.query('DELETE FROM audit_log'))).rejects.toThrow(
+      /append-only/,
+    );
     await expect(owner.query('TRUNCATE business_events CASCADE')).rejects.toThrow(/append-only/);
   });
 

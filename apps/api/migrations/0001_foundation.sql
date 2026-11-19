@@ -2,7 +2,7 @@
 -- outbox and audit log. See docs/adr/0003-state-and-event-ledger.md.
 --
 -- Migrations are immutable once applied: the runner refuses to start if a file's checksum changes.
--- The application connects as a login role that is a member of ilacore_app (never a superuser),
+-- The application connects as a login role that is a member of lpg_app (never a superuser),
 -- so row-level security always applies to it.
 
 CREATE EXTENSION IF NOT EXISTS postgis;
@@ -10,14 +10,14 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ilacore_app') THEN
-    CREATE ROLE ilacore_app NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'lpg_app') THEN
+    CREATE ROLE lpg_app NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
   END IF;
 END
 $$;
 
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-GRANT USAGE ON SCHEMA public TO ilacore_app;
+GRANT USAGE ON SCHEMA public TO lpg_app;
 
 -- The tenant for the current transaction, set by the API with set_config('app.tenant_id', ..., true).
 -- When it is not set this returns NULL, so every tenant policy matches nothing: deny by default.
@@ -124,8 +124,8 @@ CREATE POLICY tenant_isolation ON audit_log
   WITH CHECK (tenant_id = current_tenant_id());
 
 -- Least privilege for the application role.
-GRANT SELECT ON tenants TO ilacore_app;
-GRANT SELECT, INSERT ON business_events TO ilacore_app;
-GRANT SELECT, INSERT ON audit_log TO ilacore_app;
-GRANT SELECT, INSERT ON outbox TO ilacore_app;
-GRANT UPDATE (attempts, last_error, published_at, available_at) ON outbox TO ilacore_app;
+GRANT SELECT ON tenants TO lpg_app;
+GRANT SELECT, INSERT ON business_events TO lpg_app;
+GRANT SELECT, INSERT ON audit_log TO lpg_app;
+GRANT SELECT, INSERT ON outbox TO lpg_app;
+GRANT UPDATE (attempts, last_error, published_at, available_at) ON outbox TO lpg_app;

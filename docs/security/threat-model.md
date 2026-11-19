@@ -26,7 +26,7 @@ A living document. Update it whenever a feature adds a new boundary, data type o
 | Altering or deleting history | Append-only triggers on `business_events` and `audit_log` for every role; app role has no UPDATE/DELETE | `0001_foundation.sql` (tested) |
 | Event written without its side effects (or the reverse) | Event + outbox + state change in one transaction | `recordEvent` (tested) |
 | Silent schema drift | Immutable migrations with checksums | `migrate.ts` (tested) |
-| App running with excessive database rights | App connects as a non-superuser member of `ilacore_app` with least privilege | `0001_foundation.sql` |
+| App running with excessive database rights | App connects as a non-superuser member of `lpg_app` with least privilege | `0001_foundation.sql` |
 | Leaking secrets in errors or logs | Config validation names bad settings, never their values | `env.ts` (tested) |
 | Someone approving their own work | Separation-of-duties rules checked against record history | `@ilacore/domain` (rules listed; enforcement comes with the access module) |
 | Account takeover of privileged roles | MFA required for privileged and investigation permissions | Access module (next) |

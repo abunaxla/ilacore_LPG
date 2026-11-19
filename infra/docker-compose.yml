@@ -4,7 +4,7 @@ name: ilacore
 
 services:
   postgres:
-    image: postgis/postgis:17-3.5
+    image: postgis/postgis:16-3.4
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?set in infra/.env}
