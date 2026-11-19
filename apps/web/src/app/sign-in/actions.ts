@@ -58,7 +58,7 @@ export interface MfaConfirmState extends FormState {
  */
 
 /** Creates the secret and its QR code. */
-export async function startMfaSetupAction(_prev: MfaStartState): Promise<MfaStartState> {
+export async function startMfaSetupAction(): Promise<MfaStartState> {
   const token = await requireToken();
   const reply = await api<{ secret: string; uri: string }>('/auth/mfa/setup', { method: 'POST', token });
   if (!reply.ok) return { error: reply.error };
