@@ -42,29 +42,40 @@ export async function verifyMfaAction(_prev: FormState, fd: FormData): Promise<F
   redirect('/');
 }
 
-export interface MfaSetupState extends FormState {
-  phase: 'start' | 'scan' | 'codes';
+export interface MfaStartState extends FormState {
   secret?: string;
   qr?: string;
+}
+
+export interface MfaConfirmState extends FormState {
   recoveryCodes?: string[];
 }
 
-/** One action for the whole set-up: "start" creates the secret and QR code, "confirm" checks the first code. */
-export async function mfaSetupAction(prev: MfaSetupState, fd: FormData): Promise<MfaSetupState> {
+/*
+ * Set-up is two separate actions on purpose. React sends an action's previous state back to the server with
+ * each submission (and Next logs action arguments in development). If one action held the secret in its state,
+ * confirming would send the secret back. Here the secret only ever travels server -> browser, once.
+ */
+
+/** Creates the secret and its QR code. */
+export async function startMfaSetupAction(_prev: MfaStartState): Promise<MfaStartState> {
   const token = await requireToken();
-  if (fd.get('step') === 'start') {
-    const reply = await api<{ secret: string; uri: string }>('/auth/mfa/setup', { method: 'POST', token });
-    if (!reply.ok) return { phase: 'start', error: reply.error };
-    const qr = await QRCode.toDataURL(reply.data.uri, { margin: 2, width: 240, errorCorrectionLevel: 'M' });
-    return { phase: 'scan', secret: reply.data.secret, qr };
-  }
+  const reply = await api<{ secret: string; uri: string }>('/auth/mfa/setup', { method: 'POST', token });
+  if (!reply.ok) return { error: reply.error };
+  const qr = await QRCode.toDataURL(reply.data.uri, { margin: 2, width: 240, errorCorrectionLevel: 'M' });
+  return { secret: reply.data.secret, qr };
+}
+
+/** Checks the first code from the app and returns the recovery codes. */
+export async function confirmMfaSetupAction(_prev: MfaConfirmState, fd: FormData): Promise<MfaConfirmState> {
+  const token = await requireToken();
   const reply = await api<{ recoveryCodes: string[] }>('/auth/mfa/confirm', {
     method: 'POST',
     body: { code: text(fd, 'code').replace(/\s/g, '') },
     token,
   });
-  if (!reply.ok) return { ...prev, error: reply.error };
-  return { phase: 'codes', recoveryCodes: reply.data.recoveryCodes };
+  if (!reply.ok) return { error: reply.error };
+  return { recoveryCodes: reply.data.recoveryCodes };
 }
 
 export async function changePasswordAction(_prev: FormState, fd: FormData): Promise<FormState> {
