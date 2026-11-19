@@ -1,11 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { loadEnv } from './env.js';
+import { cookieSecure, loadEnv } from './env.js';
+
+const KEY = Buffer.alloc(32, 1).toString('base64');
+const BASE = { DATABASE_URL: 'postgres://app@localhost:5432/lpg_dev', MFA_ENCRYPTION_KEY: KEY };
 
 describe('loadEnv', () => {
   it('accepts a valid configuration and applies defaults', () => {
-    const env = loadEnv({ DATABASE_URL: 'postgres://app@localhost:5432/ilacore' });
+    const env = loadEnv(BASE);
     expect(env.PORT).toBe(3001);
     expect(env.NODE_ENV).toBe('development');
+    expect(env.MFA_ISSUER).toBe('ILACORE');
+    expect(cookieSecure(env)).toBe(false);
+    expect(cookieSecure(loadEnv({ ...BASE, NODE_ENV: 'production' }))).toBe(true);
+  });
+
+  it('refuses an MFA key of the wrong size', () => {
+    expect(() => loadEnv({ ...BASE, MFA_ENCRYPTION_KEY: 'c2hvcnQ=' })).toThrow(/MFA_ENCRYPTION_KEY/);
   });
 
   it('refuses to start without a database URL', () => {

@@ -2,13 +2,13 @@ import type { PoolClient } from 'pg';
 
 export interface AuditEntry {
   readonly action: string;
-  readonly actorId?: string;
-  readonly deviceId?: string;
-  readonly targetType?: string;
-  readonly targetId?: string;
-  readonly details?: Readonly<Record<string, unknown>>;
-  readonly ip?: string;
-  readonly userAgent?: string;
+  readonly actorId?: string | undefined;
+  readonly deviceId?: string | undefined;
+  readonly targetType?: string | undefined;
+  readonly targetId?: string | undefined;
+  readonly details?: Readonly<Record<string, unknown>> | undefined;
+  readonly ip?: string | undefined;
+  readonly userAgent?: string | undefined;
 }
 
 /** Appends an audit entry for the current tenant. Must be called inside withTenant(). */

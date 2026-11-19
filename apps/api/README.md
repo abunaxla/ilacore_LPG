@@ -12,6 +12,34 @@ All business rules live here, behind per-task permissions. See docs/adr/0002-mod
 - `src/config/env.ts`: validated configuration. The API won't start with bad settings.
 - `GET /health`: database reachability.
 
+## Access (Step 2)
+- `migrations/0002_access.sql`: organisation directory, locations, users, role grants, devices, sessions, MFA recovery codes.
+  All under row-level security. People, grants and devices are disabled or revoked, never erased.
+- `src/identity/`: sign-in, MFA (TOTP, RFC 6238), sessions, password changes. `src/access/`: the global guard, roles,
+  and administration of users, devices and locations. Rules (roles, permissions, PIN and password policy, separation of
+  duties) live in `@ilacore/domain`.
+- **Every route declares who may call it** (`@Public`, `@SignedIn` or `@RequirePermission`). A route without one is refused.
+
+| Endpoint | Who |
+|---|---|
+| `POST /auth/sign-in` `{organisation, phone, password}` | Anyone. Sets the `lpg_session` cookie; replies with `next` |
+| `POST /auth/device/sign-in` `{phone, pin}` + `Authorization: Device <credential>` | Registered handheld. Returns a bearer token |
+| `GET /auth/me` | Signed in (also mid-sign-in) |
+| `POST /auth/mfa/setup`, `/auth/mfa/confirm {code}`, `/auth/mfa/verify {code \| recoveryCode}` | Web, signed in |
+| `POST /auth/password {current, next}`, `POST /auth/sign-out` | Signed in |
+| `GET/POST /users`, `POST /users/:id/roles`, `/roles/:assignmentId/revoke`, `/pin`, `/password`, `/mfa/reset`, `/status` | `user.manage` |
+| `GET/POST /devices`, `POST /devices/:id/revoke` | `device.manage` |
+| `GET /locations` / `POST /locations` | `settings.manage`, `user.manage` or `device.manage` / `settings.manage` |
+
+`next` is `mfa_setup`, `mfa`, `change_password` or `done`. Until it is `done`, only the `/auth` routes work.
+
+### First administrator
+```bash
+corepack pnpm build
+echo "the-admin-password" | corepack pnpm provision --name "Acme Gas Ltd" --code acme-gas --phone 0712345678 --admin "Jane Wanjiru"
+```
+Or run it without `echo` and type the password when asked. Uses `DATABASE_MIGRATION_URL`.
+
 ## Development database (on the VPS)
 Development and integration tests use the PostgreSQL 16 + PostGIS 3.4 server on the VPS, which also hosts
 the live telematics app. Don't run Docker locally. Database names and logins all start with `lpg_` so they
@@ -24,6 +52,8 @@ never collide with the telematics app's `ilacore` database and roles (PostgreSQL
 | `lpg_app_login` | The API's login, a member of `lpg_app`. |
 | `lpg_dev` | Development database, owned by `lpg_owner`. |
 | `lpg_template` | Template with PostGIS and pgcrypto preinstalled (extensions need a superuser). |
+
+`.env` also needs `MFA_ENCRYPTION_KEY` (`openssl rand -base64 32`). Keep it safe: losing it means everyone re-enrols MFA.
 
 PostgreSQL only listens on the VPS itself. Reach it through an SSH tunnel and keep it open while you work:
 ```bash

@@ -3,3 +3,7 @@ export * from './pricing.js';
 export * from './handover.js';
 export * from './permissions.js';
 export * from './state.js';
+export * from './phone.js';
+export * from './credentials.js';
+export * from './roles.js';
+export * from './separation.js';

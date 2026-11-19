@@ -66,6 +66,18 @@ Each one links to the document with the detail. Change a decision here first, th
 ## Reporting ([detail](design/reporting-and-dashboards.md))
 - Dashboards per role. Every figure drills down to its source records. Exports to PDF, Excel and CSV.
 
+## Access (agreed 19 November 2026; [security](design/security-and-accessibility.md))
+- **Office and web users** sign in with organisation code, phone number and password (12+ characters, common ones refused).
+- **Field staff** sign in only on a registered handheld, with phone number and a **6-digit PIN**. A PIN never works on the web.
+- **Retailers never sign in.** They confirm by SMS from their registered number.
+- **No self sign-up.** An administrator creates every account. The first administrator is created with `pnpm provision` on the server.
+- **MFA uses an authenticator app** (TOTP) plus ten one-time recovery codes, not SMS: SIM-swap fraud would defeat SMS codes,
+  and the apps work without coverage. Required for every role that holds an MFA permission; set up at first sign-in.
+- **Devices** have their own credential each, revocable on its own. Revoking one ends every session on it at once.
+- **Sessions**: web signs out after 30 minutes idle and always after 12 hours; a handheld session lasts a 12-hour shift.
+- Five wrong attempts lock the account for 15 minutes (doubling, up to a day). An administrator can't change their own
+  roles, password, MFA or status; another administrator has to.
+
 ## Stack ([ADR 0001](adr/0001-stack.md))
 - TypeScript; PostgreSQL + PostGIS; Drizzle ORM with SQL migrations; NestJS; Next.js with Tailwind and shadcn/ui;
   Redis + BullMQ; S3-compatible storage; Docker. Deployed to the owner's VPS.

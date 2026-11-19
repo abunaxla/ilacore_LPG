@@ -28,15 +28,18 @@ A living document. Update it whenever a feature adds a new boundary, data type o
 | Silent schema drift | Immutable migrations with checksums | `migrate.ts` (tested) |
 | App running with excessive database rights | App connects as a non-superuser member of `lpg_app` with least privilege | `0001_foundation.sql` |
 | Leaking secrets in errors or logs | Config validation names bad settings, never their values | `env.ts` (tested) |
-| Someone approving their own work | Separation-of-duties rules checked against record history | `@ilacore/domain` (rules listed; enforcement comes with the access module) |
-| Account takeover of privileged roles | MFA required for privileged and investigation permissions | Access module (next) |
-| Fake scans from stolen devices | Per-device credentials, individually revocable | Access module (next) |
+| Someone approving their own work | Separation-of-duties rules checked against record history; administrators can't change their own access | `checkSeparation` in `@ilacore/domain` (tested; wired in as each feature arrives); `UsersService` (tested) |
+| Account takeover of privileged roles | Authenticator-app MFA (not SMS) for MFA permissions, enforced by the guard; Argon2id passwords; lockout; rate limits; generic sign-in errors | `AuthService`, `AccessGuard` (tested) |
+| Fake scans from stolen devices | Per-device credentials (hash stored), individually revocable, ending all sessions on the device; MFA permissions never usable from a handheld | `DevicesService`, `SessionService` (tested) |
+| Stolen session token | Random 256-bit tokens stored as hashes; HttpOnly, SameSite=Strict cookie; idle and absolute expiry; revocable | `SessionService` (tested) |
+| Stolen database copy producing MFA codes | MFA secrets encrypted with AES-256-GCM, key only in the environment | `SecretBox` (tested) |
 | Driver entering their own phone as the retailer's | One registered number, OTP-verified; changes need finance approval | SMS module (later) |
 | Brute-forcing confirmation codes | Single-use codes bound to counts, 15-minute expiry, limited attempts, rate limits | SMS module (later) |
 | Tipping off a thief through the UI | Security state never sent to non-investigation roles; no flags on scanning screens | API response shaping (later) |
 | Tampered evidence files | Hash on upload, stored with the record | Investigations (later) |
 
 ## Not yet covered
-- Rate limiting and security headers on the API (added with the access module).
+- Rate limits are kept in memory: move them to Redis before running more than one API process.
+- CSRF relies on SameSite=Strict cookies and JSON bodies; revisit if the web app is served from another site.
 - Hosting hardening on the VPS (firewall, TLS, backups, restore drills): needs its own document before go-live.
 - The outbox worker needs a role that can read pending work across tenants. Its design must keep that role from reading business data.

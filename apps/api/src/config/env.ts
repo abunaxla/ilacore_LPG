@@ -11,9 +11,21 @@ const EnvSchema = z.object({
   DATABASE_URL: z.url(),
   /** Connection used only to run migrations (schema owner). */
   DATABASE_MIGRATION_URL: z.url().optional(),
+  /** 32 random bytes, base64. Encrypts MFA secrets at rest. Generate with: openssl rand -base64 32 */
+  MFA_ENCRYPTION_KEY: z
+    .string()
+    .refine((v) => Buffer.from(v, 'base64').length === 32, 'must be 32 bytes, base64-encoded'),
+  /** Name shown in authenticator apps. */
+  MFA_ISSUER: z.string().min(1).default('ILACORE'),
+  /** Send the session cookie only over HTTPS. Defaults to on in production. */
+  COOKIE_SECURE: z.enum(['true', 'false']).optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
+
+export function cookieSecure(env: Env): boolean {
+  return env.COOKIE_SECURE ? env.COOKIE_SECURE === 'true' : env.NODE_ENV === 'production';
+}
 
 export function loadEnv(source: Record<string, string | undefined> = process.env): Env {
   const result = EnvSchema.safeParse(source);
