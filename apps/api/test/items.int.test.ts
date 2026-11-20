@@ -6,7 +6,7 @@
 import 'reflect-metadata';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { NestFactory } from '@nestjs/core';
-import { normalizeEpc, safetyState, todayInKenya } from '@ilacore/domain';
+import { normalizeEpc } from '@ilacore/domain';
 import { ReaderApiClient, runScenario } from '@ilacore/reader-sim';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -164,10 +164,9 @@ afterAll(async () => {
 });
 
 describe('cylinder sizes and settings', () => {
-  it('starts every organisation with 6, 13 and 50 kg and no retest interval', async () => {
+  it('starts every organisation with 6, 13 and 50 kg', async () => {
     const r = await call('GET', '/cylinder-settings', { cookie: supervisorCookie });
     expect(r.status).toBe(200);
-    expect(r.body.retestIntervalMonths).toBeNull();
     const sizes = r.body.sizes as { id: string; name: string; nominalFillKg: number }[];
     expect(sizes.map((s) => s.name)).toEqual(['6 kg', '13 kg', '50 kg']);
     size6 = sizes[0]!.id;
@@ -191,7 +190,6 @@ describe('cylinder sizes and settings', () => {
   });
 
   it('only lets the owner change settings', async () => {
-    expect((await call('PUT', '/cylinder-settings/retest-interval', { cookie: supervisorCookie, body: { months: 60 } })).status).toBe(403);
     expect((await call('POST', '/cylinder-settings/sizes', { cookie: supervisorCookie, body: { name: '9 kg', nominalFillKg: 9 } })).status).toBe(403);
   });
 });
@@ -201,7 +199,7 @@ describe('registering cylinders', () => {
     const epc = newEpc();
     const ok = await call('POST', '/cylinders', {
       cookie: supervisorCookie,
-      body: { locationId: depotA, sizeId: size13, epc: epc.toLowerCase(), serial: ' ab 1001 ', manufacturer: 'Kenpipe', tareKg: 15.2, lastTestOn: '2024-03-01' },
+      body: { locationId: depotA, sizeId: size13, epc: epc.toLowerCase(), serial: ' ab 1001 ', manufacturer: 'Kenpipe', tareKg: 15.2 },
     });
     expect(ok.status).toBe(201);
     const away = await call('POST', '/cylinders', { cookie: supervisorCookie, body: { locationId: depotB, sizeId: size13, epc: newEpc() } });
@@ -217,7 +215,7 @@ describe('registering cylinders', () => {
       body: {
         locationId: depotA,
         cylinders: [
-          { sizeId: size13, epc: newEpc(), lastTestOn: '2099-01-01' },
+          { sizeId: size13, epc: newEpc(), manufacturedOn: '2099-01-01' },
           { sizeId: size13, epc: 'not a tag' },
           { sizeId: size6, epc: newEpc() },
         ],
@@ -225,7 +223,7 @@ describe('registering cylinders', () => {
     });
     expect(r.status).toBe(400);
     expect(r.body.rows).toEqual([
-      { row: 0, fields: ['lastTestOn'] },
+      { row: 0, fields: ['manufacturedOn'] },
       { row: 1, fields: ['epc'] },
     ]);
     const twice = await call('POST', '/cylinders/import', {
@@ -273,39 +271,31 @@ describe('registering cylinders', () => {
 });
 
 describe('the register and safety', () => {
-  const cases: { lastTestOn?: string; nextTestDue?: string }[] = [
-    { lastTestOn: '2024-03-01' },
-    {},
-    { lastTestOn: '2016-01-01', nextTestDue: '2021-01-01' },
-    { lastTestOn: '2021-01-01', nextTestDue: '2026-11-25' },
-  ];
   const ids: string[] = [];
 
   beforeAll(async () => {
-    for (const c of cases) {
-      const r = await call('POST', '/cylinders', { cookie: supervisorCookie, body: { locationId: depotA, sizeId: size13, epc: newEpc(), ...c } });
+    for (let i = 0; i < 3; i++) {
+      const r = await call('POST', '/cylinders', { cookie: supervisorCookie, body: { locationId: depotA, sizeId: size13, epc: newEpc() } });
       ids.push(r.body.id as string);
     }
+    // Nothing places holds through the API yet; QC will. Set them directly to check how they read back.
+    await withTenant(owner, tenantId, async (c) => {
+      await c.query(`UPDATE cylinders SET safety_hold = 'quarantined' WHERE item_id = $1`, [ids[1]]);
+      await c.query(`UPDATE cylinders SET safety_hold = 'condemned' WHERE item_id = $1`, [ids[2]]);
+    });
   });
 
-  it('works out safety in the database exactly as the domain rule does, before and after the interval is set', async () => {
-    for (const interval of [null, 60]) {
-      expect((await call('PUT', '/cylinder-settings/retest-interval', { cookie: ownerCookie, body: { months: interval } })).status).toBe(204);
-      for (const [i, id] of ids.entries()) {
-        const d = (await call('GET', `/cylinders/${id}`, { cookie: supervisorCookie })).body;
-        const due = cases[i]!.nextTestDue ?? (cases[i]!.lastTestOn && interval ? (d.nextTestDue as string) : null);
-        expect(d.safety).toBe(safetyState({ hold: 'none', nextTestDue: due, today: todayInKenya() }));
-      }
-    }
+  it('takes safety from holds only: no test date never blocks a cylinder', async () => {
+    const safety = [];
+    for (const id of ids) safety.push((await call('GET', `/cylinders/${id}`, { cookie: supervisorCookie })).body.safety);
+    expect(safety).toEqual(['eligible', 'quarantined', 'condemned']);
     const first = (await call('GET', `/cylinders/${ids[0]}`, { cookie: supervisorCookie })).body;
-    expect(first).toMatchObject({ lastTestOn: '2024-03-01', nextTestDue: '2029-03-01', testDateKnown: true, safety: 'eligible' });
-    const unknown = (await call('GET', `/cylinders/${ids[1]}`, { cookie: supervisorCookie })).body;
-    expect(unknown).toMatchObject({ nextTestDue: null, testDateKnown: false, safety: 'retest_due' });
+    expect(first).not.toHaveProperty('nextTestDue');
   });
 
   it('filters by safety, size, state and search', async () => {
-    const overdue = await call('GET', `/cylinders?locationId=${depotA}&safety=retest_overdue`, { cookie: supervisorCookie });
-    expect((overdue.body.cylinders as { id: string }[]).map((c) => c.id)).toEqual([ids[2]]);
+    const held = await call('GET', `/cylinders?locationId=${depotA}&safety=quarantined`, { cookie: supervisorCookie });
+    expect((held.body.cylinders as { id: string }[]).map((c) => c.id)).toEqual([ids[1]]);
     const full6 = await call('GET', `/cylinders?locationId=${depotA}&sizeId=${size6}&physicalState=full&limit=5`, { cookie: supervisorCookie });
     expect(full6.body.total).toBe(150);
     expect((full6.body.cylinders as unknown[]).length).toBe(5);
@@ -320,7 +310,7 @@ describe('the register and safety', () => {
     expect((await call('GET', `/cylinders?locationId=${depotB}`, { cookie: supervisorCookie })).status).toBe(403);
     const all = await call('GET', '/cylinders', { cookie: ownerCookie });
     expect(all.status).toBe(200);
-    expect(all.body.total).toBe(305);
+    expect(all.body.total).toBe(304);
   });
 });
 

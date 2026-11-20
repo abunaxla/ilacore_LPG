@@ -16,7 +16,8 @@ export const CUSTODY_KINDS = [
 ] as const;
 export type CustodyKind = (typeof CUSTODY_KINDS)[number];
 
-export const SAFETY_STATES = ['eligible', 'retest_due', 'retest_overdue', 'quarantined', 'condemned'] as const;
+/** Set by people only (a hold), never by dates. Inspections and test dates belong to the later maintenance module. */
+export const SAFETY_STATES = ['eligible', 'quarantined', 'condemned'] as const;
 export type SafetyState = (typeof SAFETY_STATES)[number];
 
 /** Restricted: only investigation roles may ever see this dimension. */

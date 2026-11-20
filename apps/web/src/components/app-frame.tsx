@@ -16,6 +16,11 @@ export function AppFrame({ me, title, children }: { me: Me; title: string; child
       label: t.scans.nav,
       show: hasAny(me, ['item.view_position', 'item.register', 'dispatch.scan', 'stocktake.perform', 'audit.perform']),
     },
+    {
+      href: '/trips',
+      label: t.trips.nav,
+      show: hasAny(me, ['dispatch.scan', 'dispatch.approve_exception', 'route.settle', 'item.view_position']),
+    },
     { href: '/settings/cylinders', label: t.cylinderSettings.nav, show: hasAny(me, ['settings.manage']) },
     { href: '/admin/users', label: t.admin.users, show: hasAny(me, ['user.manage']) },
     { href: '/admin/devices', label: t.admin.devices, show: hasAny(me, ['device.manage']) },

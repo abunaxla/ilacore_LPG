@@ -7,7 +7,8 @@ import { Loading } from '@/components/page-shell';
 import { getMessages } from '@/i18n';
 import { hasAny, requireMe } from '@/lib/auth';
 import { load, type Location } from '../admin/data';
-import { groupEpc, placesFor, showDate, type CylinderSettings, type CylinderSummary } from './data';
+import { showPlate } from '../trips/data';
+import { groupEpc, placesFor, type CylinderSettings, type CylinderSummary } from './data';
 
 type Search = Promise<Record<string, string | string[] | undefined>>;
 
@@ -33,7 +34,7 @@ async function Cylinders({ searchParams }: { searchParams: Search }) {
 
   const [locations, settings] = await Promise.all([
     load<Location[]>('/locations', []),
-    load<CylinderSettings>('/cylinder-settings', { retestIntervalMonths: null, sizes: [] }),
+    load<CylinderSettings>('/cylinder-settings', { sizes: [] }),
   ]);
   const view = placesFor(me, ['item.view_position', 'item.register'], locations);
   const canRegister = placesFor(me, ['item.register'], locations).places.length > 0;
@@ -113,7 +114,6 @@ async function Cylinders({ searchParams }: { searchParams: Search }) {
                   <th scope="col" className="p-2">{c.size}</th>
                   <th scope="col" className="p-2">{c.state}</th>
                   <th scope="col" className="p-2">{c.safety}</th>
-                  <th scope="col" className="p-2">{c.nextTest}</th>
                   <th scope="col" className="p-2">{c.location}</th>
                   <th scope="col" className="p-2">{c.tag}</th>
                 </tr>
@@ -129,8 +129,12 @@ async function Cylinders({ searchParams }: { searchParams: Search }) {
                     <td className="p-2">{cyl.size.name}</td>
                     <td className="p-2">{c.physical[cyl.physicalState]}</td>
                     <td className="p-2">{c.safetyStates[cyl.safety]}</td>
-                    <td className="p-2">{cyl.nextTestDue ? showDate(cyl.nextTestDue) : c.unknownDate}</td>
-                    <td className="p-2">{cyl.custody.locationName ?? c.custody[cyl.custody.kind as keyof typeof c.custody]}</td>
+                    <td className="p-2">
+                      {cyl.custody.locationName ??
+                        (cyl.custody.trip
+                          ? `${c.custody.truck} ${showPlate(cyl.custody.trip.vehicleReg)}`
+                          : c.custody[cyl.custody.kind as keyof typeof c.custody])}
+                    </td>
                     <td className="p-2 font-mono text-base">{cyl.epc ? groupEpc(cyl.epc) : c.noTag}</td>
                   </tr>
                 ))}

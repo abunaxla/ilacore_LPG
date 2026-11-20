@@ -10,6 +10,7 @@ import { hasAny, requireMe } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { getToken } from '@/lib/session';
 import { replaceTagAction } from '../actions';
+import { showPlate } from '../../trips/data';
 import { groupEpc, showDate, showTime, type CylinderDetail } from '../data';
 
 type Params = Promise<{ id: string }>;
@@ -48,7 +49,6 @@ async function Cylinder({ params }: { params: Params }) {
   }
   const cyl = reply.data;
   const canReplace = hasAny(me, ['item.replace_tag']) && can(me.roles, 'item.replace_tag', cyl.custody.locationId ?? undefined);
-  const derived = cyl.nextTestDue !== null && cyl.recordedNextTestDue === null;
 
   return (
     <AppFrame me={me} title={cyl.serial ? c.titleWithSerial(cyl.serial) : c.title}>
@@ -63,6 +63,14 @@ async function Cylinder({ params }: { params: Params }) {
           <Row label={c.where}>
             {cs.custody[cyl.custody.kind as keyof typeof cs.custody]}
             {cyl.custody.locationName ? `: ${cyl.custody.locationName}` : ''}
+            {cyl.custody.trip ? (
+              <>
+                {': '}
+                <Link href={`/trips/${cyl.custody.trip.id}`} className="underline underline-offset-4">
+                  {showPlate(cyl.custody.trip.vehicleReg)}
+                </Link>
+              </>
+            ) : null}
           </Row>
           <Row label={c.safety}>{cs.safetyStates[cyl.safety]}</Row>
           {cyl.security !== undefined ? <Row label={c.security}>{cyl.security}</Row> : null}
@@ -77,10 +85,6 @@ async function Cylinder({ params }: { params: Params }) {
           <Row label={c.manufacturer}>{cyl.manufacturer ?? cs.unknownDate}</Row>
           <Row label={c.manufacturedOn}>{cyl.manufacturedOn ? showDate(cyl.manufacturedOn) : cs.unknownDate}</Row>
           <Row label={c.tare}>{cyl.tareKg !== null ? `${cyl.tareKg} kg` : cs.unknownDate}</Row>
-          <Row label={c.lastTest}>{cyl.lastTestOn ? showDate(cyl.lastTestOn) : cs.unknownDate}</Row>
-          <Row label={c.nextTest}>
-            {cyl.nextTestDue ? `${showDate(cyl.nextTestDue)}${derived ? ` ${c.nextTestDerived}` : ''}` : cs.unknownDate}
-          </Row>
           <Row label={c.registered}>{showTime(cyl.registeredAt)}</Row>
         </dl>
       </section>
@@ -122,6 +126,9 @@ async function Cylinder({ params }: { params: Params }) {
                 {showTime(h.occurredAt)}
                 {h.actor ? ` · ${c.by} ${h.actor}` : ''}
                 {h.type === 'item.tag_replaced' && typeof h.payload['newEpc'] === 'string' ? ` · ${groupEpc(h.payload['newEpc'])}` : ''}
+                {(h.type === 'item.dispatched' || h.type === 'item.returned') && typeof h.payload['vehicleReg'] === 'string'
+                  ? ` · ${showPlate(h.payload['vehicleReg'])}`
+                  : ''}
               </p>
             </li>
           ))}

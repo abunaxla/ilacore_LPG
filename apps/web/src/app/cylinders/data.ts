@@ -11,7 +11,6 @@ export interface CylinderSize {
 }
 
 export interface CylinderSettings {
-  retestIntervalMonths: number | null;
   sizes: CylinderSize[];
 }
 
@@ -22,18 +21,20 @@ export interface CylinderSummary {
   manufacturer: string | null;
   size: { id: string; name: string };
   physicalState: 'empty' | 'filling' | 'full' | 'damaged' | 'scrapped';
-  custody: { kind: string; locationId: string | null; locationName: string | null };
-  lastTestOn: string | null;
-  nextTestDue: string | null;
-  testDateKnown: boolean;
+  custody: {
+    kind: string;
+    locationId: string | null;
+    locationName: string | null;
+    /** Set while it is on a truck. */
+    trip: { id: string; vehicleReg: string; depotId: string } | null;
+  };
   safetyHold: string;
-  safety: 'eligible' | 'retest_due' | 'retest_overdue' | 'quarantined' | 'condemned';
+  safety: 'eligible' | 'quarantined' | 'condemned';
 }
 
 export interface CylinderDetail extends CylinderSummary {
   manufacturedOn: string | null;
   tareKg: number | null;
-  recordedNextTestDue: string | null;
   registeredAt: string;
   tags: { epc: string; attachedAt: string; retiredAt: string | null; retireReason: string | null }[];
   history: { type: string; occurredAt: string; actor: string | null; payload: Record<string, unknown> }[];

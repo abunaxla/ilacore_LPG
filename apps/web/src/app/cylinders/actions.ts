@@ -41,7 +41,7 @@ export interface RegisterState extends FormState {
   seq?: number;
 }
 
-const REGISTER_FIELDS = ['locationId', 'sizeId', 'epc', 'serial', 'manufacturer', 'manufacturedOn', 'tareKg', 'lastTestOn', 'nextTestDue', 'physicalState'];
+const REGISTER_FIELDS = ['locationId', 'sizeId', 'epc', 'serial', 'manufacturer', 'manufacturedOn', 'tareKg', 'physicalState'];
 
 export async function registerCylinderAction(prev: RegisterState, fd: FormData): Promise<RegisterState> {
   const values = Object.fromEntries(REGISTER_FIELDS.map((f) => [f, text(fd, f)]));
@@ -55,8 +55,6 @@ export async function registerCylinderAction(prev: RegisterState, fd: FormData):
     manufacturer: optional(fd, 'manufacturer'),
     manufacturedOn: optional(fd, 'manufacturedOn'),
     tareKg: tare === undefined ? undefined : Number(tare.replace(',', '.')),
-    lastTestOn: optional(fd, 'lastTestOn'),
-    nextTestDue: optional(fd, 'nextTestDue'),
     physicalState: text(fd, 'physicalState') === 'full' ? 'full' : 'empty',
   });
   if (!reply.ok) {
@@ -90,8 +88,6 @@ const COLUMNS: Record<string, string[]> = {
   manufacturer: ['manufacturer', 'maker', 'make'],
   manufacturedOn: ['manufactured', 'manufactured on', 'date of manufacture', 'manufacture date', 'mfg'],
   tareKg: ['tare', 'tare kg', 'tare weight'],
-  lastTestOn: ['last test', 'last tested', 'last test date', 'tested'],
-  nextTestDue: ['next test', 'next test due', 'due', 'test due'],
   physicalState: ['state', 'fill'],
 };
 
@@ -122,14 +118,14 @@ export async function importCylindersAction(prev: ImportState, fd: FormData): Pr
 
   const header = split(lines[0]!).map((h) => h.toLowerCase().replace(/[()_]/g, ' ').replace(/\s+/g, ' ').trim());
   const columnOf: (string | null)[] = [];
-  const unknown: string[] = [];
+  // Stock sheets carry other columns (notes, colour...). Those are skipped, and the result says which.
+  const skipped: string[] = [];
   for (const h of header) {
     const key = Object.entries(COLUMNS).find(([, names]) => names.includes(h))?.[0] ?? null;
-    if (!key && h) unknown.push(t.unknownColumn(h));
+    if (!key && h) skipped.push(h);
     columnOf.push(key);
   }
-  if (!columnOf.includes('epc') || !columnOf.includes('size')) return { error: 'invalid_request', problems: [{ line: 1, messages: [t.noHeader, ...unknown] }], ...keep };
-  if (unknown.length > 0) return { error: 'invalid_request', problems: [{ line: 1, messages: unknown }], ...keep };
+  if (!columnOf.includes('epc') || !columnOf.includes('size')) return { error: 'invalid_request', problems: [{ line: 1, messages: [t.noHeader] }], ...keep };
 
   const settings = await api<CylinderSettings>('/cylinder-settings', { token: await token() });
   const sizes = settings.ok ? settings.data.sizes.filter((s) => !s.retired) : [];
@@ -157,8 +153,6 @@ export async function importCylindersAction(prev: ImportState, fd: FormData): Pr
       manufacturer: get('manufacturer') || undefined,
       manufacturedOn: get('manufacturedOn') ? toIsoDate(get('manufacturedOn')) : undefined,
       tareKg: tare ? Number(tare.replace(',', '.')) : undefined,
-      lastTestOn: get('lastTestOn') ? toIsoDate(get('lastTestOn')) : undefined,
-      nextTestDue: get('nextTestDue') ? toIsoDate(get('nextTestDue')) : undefined,
       physicalState: state === 'full' ? ('full' as const) : ('empty' as const),
     };
   });
@@ -178,7 +172,8 @@ export async function importCylindersAction(prev: ImportState, fd: FormData): Pr
     return { error: reply.ok ? 'invalid_rows' : reply.error, problems: sorted, ...keep };
   }
   refresh();
-  return { message: t.done((reply.data['ids'] as string[]).length), text: '', locationId, seq };
+  const done = t.done((reply.data['ids'] as string[]).length);
+  return { message: skipped.length > 0 ? `${done} ${t.skipped(skipped)}` : done, text: '', locationId, seq };
 }
 
 export async function replaceTagAction(itemId: string, _prev: FormState, fd: FormData): Promise<FormState> {
@@ -198,16 +193,6 @@ export async function addSizeAction(_prev: FormState, fd: FormData): Promise<For
 
 export async function retireSizeAction(sizeId: string): Promise<FormState> {
   const reply = await send(`/cylinder-settings/sizes/${sizeId}/retire`);
-  if (!reply.ok) return { error: reply.error };
-  refresh();
-  return { message: getMessages().admin.saved };
-}
-
-export async function setRetestIntervalAction(_prev: FormState, fd: FormData): Promise<FormState> {
-  const raw = text(fd, 'months');
-  const months = raw === '' ? null : Number(raw);
-  if (months !== null && !Number.isInteger(months)) return { error: 'invalid_request' };
-  const reply = await send('/cylinder-settings/retest-interval', { months }, 'PUT');
   if (!reply.ok) return { error: reply.error };
   refresh();
   return { message: getMessages().admin.saved };

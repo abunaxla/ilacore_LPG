@@ -22,7 +22,7 @@ async function RegisterCylinder() {
   const r = t.registerCylinder;
   const [locations, settings] = await Promise.all([
     load<Location[]>('/locations', []),
-    load<CylinderSettings>('/cylinder-settings', { retestIntervalMonths: null, sizes: [] }),
+    load<CylinderSettings>('/cylinder-settings', { sizes: [] }),
   ]);
   const { places } = placesFor(me, ['item.register'], locations);
   if (places.length === 0) return <AppFrame me={me} title={r.title}><NoAccess /></AppFrame>;
@@ -36,7 +36,6 @@ async function RegisterCylinder() {
       <RegisterForm
         places={places.map((p) => ({ id: p.id, name: p.name }))}
         sizes={settings.sizes.filter((s) => !s.retired).map((s) => ({ id: s.id, name: s.name }))}
-        intervalSet={settings.retestIntervalMonths !== null}
       />
     </AppFrame>
   );

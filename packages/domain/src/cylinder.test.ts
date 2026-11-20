@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addMonths,
   checkCylinderSize,
-  daysBetween,
   isIsoDate,
   isSafeToDispatch,
-  nextTestDue,
   normalizeEpc,
   normalizeSerial,
   safetyState,
@@ -35,53 +32,23 @@ describe('dates', () => {
     expect(isIsoDate('2026-2-3')).toBe(false);
   });
 
-  it('adds months and clamps to the end of the month', () => {
-    expect(addMonths('2021-01-31', 1)).toBe('2021-02-28');
-    expect(addMonths('2024-01-31', 1)).toBe('2024-02-29');
-    expect(addMonths('2016-06-15', 120)).toBe('2026-06-15');
-  });
-
-  it('counts days and knows the Kenyan date', () => {
-    expect(daysBetween('2026-11-20', '2026-12-20')).toBe(30);
-    expect(daysBetween('2026-11-20', '2026-11-19')).toBe(-1);
+  it('knows the Kenyan date', () => {
     // 22:30 UTC is already the next morning in Nairobi.
     expect(todayInKenya(new Date('2026-11-19T22:30:00Z'))).toBe('2026-11-20');
   });
 });
 
-describe('test due date', () => {
-  it('prefers a recorded due date, else last test plus the interval, else unknown', () => {
-    expect(nextTestDue({ nextTestDue: '2027-03-01', lastTestOn: '2020-01-01', retestIntervalMonths: 60 })).toBe('2027-03-01');
-    expect(nextTestDue({ lastTestOn: '2022-05-10', retestIntervalMonths: 60 })).toBe('2027-05-10');
-    expect(nextTestDue({ lastTestOn: '2022-05-10', retestIntervalMonths: null })).toBeNull();
-    expect(nextTestDue({})).toBeNull();
-  });
-});
-
 describe('safety', () => {
-  const today = '2026-11-20';
-
-  it('is eligible well before the due date, due inside 30 days, overdue after', () => {
-    expect(safetyState({ hold: 'none', nextTestDue: '2027-06-01', today })).toBe('eligible');
-    expect(safetyState({ hold: 'none', nextTestDue: '2026-12-20', today })).toBe('retest_due');
-    expect(safetyState({ hold: 'none', nextTestDue: '2026-11-19', today })).toBe('retest_overdue');
+  it('is set by holds only, never by dates', () => {
+    expect(safetyState('none')).toBe('eligible');
+    expect(safetyState('quarantined')).toBe('quarantined');
+    expect(safetyState('condemned')).toBe('condemned');
   });
 
-  it('lets a hold win over any date', () => {
-    expect(safetyState({ hold: 'quarantined', nextTestDue: '2030-01-01', today })).toBe('quarantined');
-    expect(safetyState({ hold: 'condemned', nextTestDue: '2030-01-01', today })).toBe('condemned');
-  });
-
-  it('treats an unknown test date as due, and blocks dispatch until it is recorded', () => {
-    expect(safetyState({ hold: 'none', nextTestDue: null, today })).toBe('retest_due');
-    expect(isSafeToDispatch({ hold: 'none', nextTestDue: null, today })).toBe(false);
-  });
-
-  it('allows dispatch while eligible or due soon, never when overdue or held', () => {
-    expect(isSafeToDispatch({ hold: 'none', nextTestDue: '2027-06-01', today })).toBe(true);
-    expect(isSafeToDispatch({ hold: 'none', nextTestDue: '2026-12-01', today })).toBe(true);
-    expect(isSafeToDispatch({ hold: 'none', nextTestDue: '2026-11-01', today })).toBe(false);
-    expect(isSafeToDispatch({ hold: 'quarantined', nextTestDue: '2027-06-01', today })).toBe(false);
+  it('lets a cylinder go out only while no hold is on it', () => {
+    expect(isSafeToDispatch('none')).toBe(true);
+    expect(isSafeToDispatch('quarantined')).toBe(false);
+    expect(isSafeToDispatch('condemned')).toBe(false);
   });
 });
 

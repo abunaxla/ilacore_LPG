@@ -16,26 +16,20 @@ export interface CylinderSize {
 }
 
 export interface CylinderSettings {
-  /** Months between tests. Null until the owner sets it. */
-  retestIntervalMonths: number | null;
   sizes: CylinderSize[];
 }
 
-/** Organisation settings for cylinders: the sizes it runs and the retest interval. */
+/** Organisation settings for cylinders: the sizes it runs. */
 @Injectable()
 export class SizesService {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
 
   async settings(actor: AuthContext): Promise<CylinderSettings> {
     return withTenant(this.pool, actor.tenantId, async (c) => {
-      const s = await c.query<{ retest_interval_months: number | null }>(
-        'SELECT retest_interval_months FROM tenant_settings',
-      );
       const sizes = await c.query<{ id: string; name: string; nominal_fill_kg: string; retired_at: Date | null }>(
         'SELECT id, name, nominal_fill_kg, retired_at FROM cylinder_sizes ORDER BY nominal_fill_kg, name',
       );
       return {
-        retestIntervalMonths: s.rows[0]?.retest_interval_months ?? null,
         sizes: sizes.rows.map((r) => ({
           id: r.id,
           name: r.name,
@@ -43,23 +37,6 @@ export class SizesService {
           retired: r.retired_at !== null,
         })),
       };
-    });
-  }
-
-  async setRetestInterval(actor: AuthContext, months: number | null, meta: RequestMeta): Promise<void> {
-    await withTenant(this.pool, actor.tenantId, async (c) => {
-      const before = await c.query<{ retest_interval_months: number | null }>('SELECT retest_interval_months FROM tenant_settings');
-      await c.query(
-        `INSERT INTO tenant_settings (tenant_id, retest_interval_months, updated_by) VALUES (current_tenant_id(), $1, $2)
-         ON CONFLICT (tenant_id) DO UPDATE SET retest_interval_months = $1, updated_by = $2, updated_at = now()`,
-        [months, actor.userId],
-      );
-      await recordAudit(c, {
-        action: 'settings.retest_interval_changed',
-        actorId: actor.userId,
-        details: { from: before.rows[0]?.retest_interval_months ?? null, to: months },
-        ...meta,
-      });
     });
   }
 

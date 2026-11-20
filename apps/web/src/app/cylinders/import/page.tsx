@@ -22,7 +22,7 @@ async function ImportCylinders() {
   const m = t.importCylinders;
   const [locations, settings] = await Promise.all([
     load<Location[]>('/locations', []),
-    load<CylinderSettings>('/cylinder-settings', { retestIntervalMonths: null, sizes: [] }),
+    load<CylinderSettings>('/cylinder-settings', { sizes: [] }),
   ]);
   const { places } = placesFor(me, ['item.register'], locations);
   if (places.length === 0) return <AppFrame me={me} title={m.title}><NoAccess /></AppFrame>;

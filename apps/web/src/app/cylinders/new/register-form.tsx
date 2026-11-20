@@ -12,7 +12,7 @@ interface Option {
   name: string;
 }
 
-export function RegisterForm({ places, sizes, intervalSet }: { places: Option[]; sizes: Option[]; intervalSet: boolean }) {
+export function RegisterForm({ places, sizes }: { places: Option[]; sizes: Option[] }) {
   const t = getMessages();
   const r = t.registerCylinder;
   const [state, run] = useActionState<RegisterState, FormData>(registerCylinderAction, {});
@@ -57,6 +57,9 @@ export function RegisterForm({ places, sizes, intervalSet }: { places: Option[];
           name="epc"
           label={r.epc}
           hint={r.epcHint}
+          // After each one is registered the tag field is ready again, so a reader typing like a keyboard
+          // can scan the next cylinder straight away (place, size and fill are kept).
+          autoFocus={Boolean(state.createdId)}
           required
           autoComplete="off"
           spellCheck={false}
@@ -72,10 +75,7 @@ export function RegisterForm({ places, sizes, intervalSet }: { places: Option[];
         <Field name="manufacturer" label={r.manufacturer} autoComplete="off" defaultValue={v['manufacturer'] ?? ''} {...invalid('manufacturer')} />
         <Field name="manufacturedOn" type="date" label={r.manufacturedOn} defaultValue={v['manufacturedOn'] ?? ''} {...invalid('manufacturedOn')} />
         <Field name="tareKg" label={r.tareKg} hint={r.tareHint} inputMode="decimal" autoComplete="off" defaultValue={v['tareKg'] ?? ''} {...invalid('tareKg')} />
-        <Field name="lastTestOn" type="date" label={r.lastTestOn} defaultValue={v['lastTestOn'] ?? ''} {...invalid('lastTestOn')} />
-        <Field name="nextTestDue" type="date" label={r.nextTestDue} hint={r.nextTestHint} defaultValue={v['nextTestDue'] ?? ''} {...invalid('nextTestDue')} />
       </div>
-      <p>{intervalSet ? r.noTestNote : `${r.noTestNote} ${t.cylinderSettings.intervalNotSet}`}</p>
       <div>
         <SubmitButton label={r.submit} working={r.working} />
       </div>

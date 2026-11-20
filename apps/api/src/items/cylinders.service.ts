@@ -3,7 +3,6 @@ import {
   isIsoDate,
   normalizeEpc,
   normalizeSerial,
-  RETEST_WARNING_DAYS,
   todayInKenya,
   type Permission,
   type TagRetireReason,
@@ -29,8 +28,6 @@ export interface NewCylinder {
   manufacturer?: string | undefined;
   manufacturedOn?: string | undefined;
   tareKg?: number | undefined;
-  lastTestOn?: string | undefined;
-  nextTestDue?: string | undefined;
   /** Existing stock may already be full. Default empty. */
   physicalState?: 'empty' | 'full' | undefined;
 }
@@ -49,11 +46,13 @@ export interface CylinderSummary {
   manufacturer: string | null;
   size: { id: string; name: string };
   physicalState: string;
-  custody: { kind: string; locationId: string | null; locationName: string | null };
-  lastTestOn: string | null;
-  /** The effective due date: recorded, or last test + interval. Null when unknown. */
-  nextTestDue: string | null;
-  testDateKnown: boolean;
+  /** On a truck: the trip and its number plate, and the depot it left from (whose staff may see it). */
+  custody: {
+    kind: string;
+    locationId: string | null;
+    locationName: string | null;
+    trip: { id: string; vehicleReg: string; depotId: string } | null;
+  };
   safetyHold: string;
   safety: string;
 }
@@ -61,8 +60,6 @@ export interface CylinderSummary {
 export interface CylinderDetail extends CylinderSummary {
   manufacturedOn: string | null;
   tareKg: number | null;
-  /** The due date as recorded (not derived). */
-  recordedNextTestDue: string | null;
   registeredAt: Date;
   tags: { epc: string; attachedAt: Date; retiredAt: Date | null; retireReason: string | null }[];
   history: { type: string; occurredAt: Date; actor: string | null; payload: Record<string, unknown> }[];
@@ -83,38 +80,21 @@ export interface CylinderFilters {
 const VIEW: readonly Permission[] = ['item.view_position', 'item.register'];
 
 /*
- * The base query. Safety is worked out here (not stored) because time changes it: the due date is the
- * recorded one, or the last test plus the organisation's interval (PostgreSQL clamps month ends the same
- * way as addMonths in @ilacore/domain). $1 is today's date in Kenya, $2 the warning window in days.
- * Keep this in step with safetyState() in @ilacore/domain; the integration tests compare the two.
+ * The base query. Safety comes from the hold alone (safetyState() in @ilacore/domain); dates never change it.
+ * The test-date columns stay in the table, unused, for the later maintenance module.
  */
 const BASE = `
   SELECT i.id, i.physical_state, i.custody_kind, i.custody_location_id, l.name AS location_name,
          i.registered_at, c.serial, c.manufacturer, c.size_id, z.name AS size_name, c.tare_kg, c.safety_hold,
          to_char(c.manufactured_on, 'YYYY-MM-DD') AS manufactured_on,
-         to_char(c.last_test_on, 'YYYY-MM-DD') AS last_test_on,
-         to_char(c.next_test_due, 'YYYY-MM-DD') AS recorded_next_test_due,
-         to_char(d.due, 'YYYY-MM-DD') AS next_test_due,
-         sf.safety, t.epc
+         CASE c.safety_hold WHEN 'none' THEN 'eligible' ELSE c.safety_hold END AS safety, t.epc,
+         tr.id AS trip_id, tr.vehicle_reg, tr.depot_id AS trip_depot_id
   FROM tracked_items i
   JOIN cylinders c ON c.item_id = i.id
   JOIN cylinder_sizes z ON z.id = c.size_id
   LEFT JOIN locations l ON l.id = i.custody_location_id
   LEFT JOIN item_tags t ON t.item_id = i.id AND t.retired_at IS NULL
-  LEFT JOIN tenant_settings ts ON true
-  CROSS JOIN LATERAL (
-    SELECT coalesce(c.next_test_due, (c.last_test_on + make_interval(months => ts.retest_interval_months))::date) AS due
-  ) d
-  CROSS JOIN LATERAL (
-    SELECT CASE
-      WHEN c.safety_hold = 'condemned' THEN 'condemned'
-      WHEN c.safety_hold = 'quarantined' THEN 'quarantined'
-      WHEN d.due IS NULL THEN 'retest_due'
-      WHEN d.due < $1::date THEN 'retest_overdue'
-      WHEN d.due <= $1::date + $2::integer THEN 'retest_due'
-      ELSE 'eligible'
-    END AS safety
-  ) sf`;
+  LEFT JOIN trips tr ON i.custody_kind = 'truck' AND tr.id = i.custody_holder_id`;
 
 interface BaseRow {
   id: string;
@@ -130,11 +110,11 @@ interface BaseRow {
   tare_kg: string | null;
   safety_hold: string;
   manufactured_on: string | null;
-  last_test_on: string | null;
-  recorded_next_test_due: string | null;
-  next_test_due: string | null;
   safety: string;
   epc: string | null;
+  trip_id: string | null;
+  vehicle_reg: string | null;
+  trip_depot_id: string | null;
 }
 
 function summary(r: BaseRow): CylinderSummary {
@@ -145,10 +125,12 @@ function summary(r: BaseRow): CylinderSummary {
     manufacturer: r.manufacturer,
     size: { id: r.size_id, name: r.size_name },
     physicalState: r.physical_state,
-    custody: { kind: r.custody_kind, locationId: r.custody_location_id, locationName: r.location_name },
-    lastTestOn: r.last_test_on,
-    nextTestDue: r.next_test_due,
-    testDateKnown: r.next_test_due !== null,
+    custody: {
+      kind: r.custody_kind,
+      locationId: r.custody_location_id,
+      locationName: r.location_name,
+      trip: r.trip_id ? { id: r.trip_id, vehicleReg: r.vehicle_reg!, depotId: r.trip_depot_id! } : null,
+    },
     safetyHold: r.safety_hold,
     safety: r.safety,
   };
@@ -164,8 +146,6 @@ interface CleanCylinder {
   manufacturer: string | null;
   manufacturedOn: string | null;
   tareKg: number | null;
-  lastTestOn: string | null;
-  nextTestDue: string | null;
   physicalState: 'empty' | 'full';
 }
 
@@ -181,7 +161,7 @@ function cleanRow(input: NewCylinder, today: string): { row: CleanCylinder } | {
   const manufacturer = input.manufacturer?.trim() ? input.manufacturer.trim().replace(/\s+/g, ' ') : null;
   if (manufacturer && manufacturer.length > 80) fields.push('manufacturer');
 
-  const date = (name: 'manufacturedOn' | 'lastTestOn' | 'nextTestDue'): string | null => {
+  const date = (name: 'manufacturedOn'): string | null => {
     const v = input[name]?.trim();
     if (!v) return null;
     if (!isIsoDate(v)) {
@@ -191,12 +171,7 @@ function cleanRow(input: NewCylinder, today: string): { row: CleanCylinder } | {
     return v;
   };
   const manufacturedOn = date('manufacturedOn');
-  const lastTestOn = date('lastTestOn');
-  const nextTestDue = date('nextTestDue');
   if (manufacturedOn && manufacturedOn > today) fields.push('manufacturedOn');
-  if (lastTestOn && lastTestOn > today) fields.push('lastTestOn');
-  if (lastTestOn && manufacturedOn && lastTestOn < manufacturedOn) fields.push('lastTestOn');
-  if (nextTestDue && lastTestOn && nextTestDue <= lastTestOn) fields.push('nextTestDue');
 
   const tare = input.tareKg;
   if (tare !== undefined && (!Number.isFinite(tare) || tare <= 0 || tare > 1000 || Math.abs(Math.round(tare * 100) - tare * 100) > 1e-9)) {
@@ -215,8 +190,6 @@ function cleanRow(input: NewCylinder, today: string): { row: CleanCylinder } | {
       manufacturer,
       manufacturedOn,
       tareKg: tare ?? null,
-      lastTestOn,
-      nextTestDue,
       physicalState,
     },
   };
@@ -333,10 +306,10 @@ export class CylindersService {
       [ids],
     );
     await c.query(
-      `INSERT INTO cylinders (item_id, tenant_id, size_id, serial, manufacturer, manufactured_on, tare_kg, last_test_on, next_test_due)
-       SELECT r.id, current_tenant_id(), r.size_id, r.serial, r.manufacturer, r.made::date, r.tare, r.tested::date, r.due::date
-       FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::text[], $5::text[], $6::numeric[], $7::text[], $8::text[])
-         AS r(id, size_id, serial, manufacturer, made, tare, tested, due)`,
+      `INSERT INTO cylinders (item_id, tenant_id, size_id, serial, manufacturer, manufactured_on, tare_kg)
+       SELECT r.id, current_tenant_id(), r.size_id, r.serial, r.manufacturer, r.made::date, r.tare
+       FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::text[], $5::text[], $6::numeric[])
+         AS r(id, size_id, serial, manufacturer, made, tare)`,
       [
         ids,
         rows.map((r) => r.sizeId),
@@ -344,8 +317,6 @@ export class CylindersService {
         rows.map((r) => r.manufacturer),
         rows.map((r) => r.manufacturedOn),
         rows.map((r) => r.tareKg),
-        rows.map((r) => r.lastTestOn),
-        rows.map((r) => r.nextTestDue),
       ],
     );
     await c.query(
@@ -382,8 +353,6 @@ export class CylindersService {
   async list(actor: AuthContext, f: CylinderFilters): Promise<{ total: number; cylinders: CylinderSummary[] }> {
     const search = f.search?.trim() ? f.search.trim().toUpperCase().replace(/[%_\\]/g, '') : null;
     const params = [
-      todayInKenya(),
-      RETEST_WARNING_DAYS,
       f.locationId ?? null,
       f.sizeId ?? null,
       f.physicalState ?? null,
@@ -391,15 +360,15 @@ export class CylindersService {
       search ? `%${search}%` : null,
     ];
     const where = `
-      WHERE ($3::uuid IS NULL OR i.custody_location_id = $3)
-        AND ($4::uuid IS NULL OR c.size_id = $4)
-        AND ($5::text IS NULL OR i.physical_state = $5)
-        AND ($6::text IS NULL OR sf.safety = $6)
-        AND ($7::text IS NULL OR c.serial LIKE $7 OR t.epc LIKE $7)`;
+      WHERE ($1::uuid IS NULL OR i.custody_location_id = $1 OR tr.depot_id = $1)
+        AND ($2::uuid IS NULL OR c.size_id = $2)
+        AND ($3::text IS NULL OR i.physical_state = $3)
+        AND ($4::text IS NULL OR (CASE c.safety_hold WHEN 'none' THEN 'eligible' ELSE c.safety_hold END) = $4)
+        AND ($5::text IS NULL OR c.serial LIKE $5 OR t.epc LIKE $5)`;
     return withTenant(this.pool, actor.tenantId, async (c) => {
       const total = await c.query<{ n: string }>(`SELECT count(*) AS n FROM (${BASE} ${where}) q`, params);
       const rows = await c.query<BaseRow>(
-        `${BASE} ${where} ORDER BY z.nominal_fill_kg, c.serial NULLS LAST, i.registered_at LIMIT $8 OFFSET $9`,
+        `${BASE} ${where} ORDER BY z.nominal_fill_kg, c.serial NULLS LAST, i.registered_at LIMIT $6 OFFSET $7`,
         [...params, f.limit, f.offset],
       );
       return { total: Number(total.rows[0]!.n), cylinders: rows.rows.map(summary) };
@@ -428,10 +397,11 @@ export class CylindersService {
   }
 
   private async load(c: PoolClient, actor: AuthContext, itemId: string): Promise<CylinderDetail> {
-    const row = await c.query<BaseRow>(`${BASE} WHERE i.id = $3`, [todayInKenya(), RETEST_WARNING_DAYS, itemId]);
+    const row = await c.query<BaseRow>(`${BASE} WHERE i.id = $1`, [itemId]);
     const r = row.rows[0];
     if (!r) throw apiError(HttpStatus.NOT_FOUND, 'not_found', 'No such cylinder.');
-    requireAt(actor, VIEW, r.custody_location_id);
+    // A cylinder on a truck is visible to the staff of the depot it left from.
+    requireAt(actor, VIEW, r.custody_location_id ?? r.trip_depot_id);
 
     const tags = await c.query<{ epc: string; attached_at: Date; retired_at: Date | null; retire_reason: string | null }>(
       'SELECT epc, attached_at, retired_at, retire_reason FROM item_tags WHERE item_id = $1 ORDER BY attached_at',
@@ -448,7 +418,6 @@ export class CylindersService {
       ...summary(r),
       manufacturedOn: r.manufactured_on,
       tareKg: r.tare_kg === null ? null : Number(r.tare_kg),
-      recordedNextTestDue: r.recorded_next_test_due,
       registeredAt: r.registered_at,
       tags: tags.rows.map((t) => ({ epc: t.epc, attachedAt: t.attached_at, retiredAt: t.retired_at, retireReason: t.retire_reason })),
       history: history.rows.map((h) => ({ type: h.event_type, occurredAt: h.occurred_at, actor: h.actor, payload: h.payload })),

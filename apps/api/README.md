@@ -43,11 +43,11 @@ Or run it without `echo` and type the password when asked. Uses `DATABASE_MIGRAT
 ## Cylinders, tags and scan sessions (Step 3)
 - `migrations/0003_items.sql`: the tracked-item core (`tracked_items`, ADR 0004) with cylinders as the first type;
   RFID tags (`item_tags`: a tag number belongs to one item forever and a retired tag never comes back, enforced by a
-  trigger); the restricted `item_security` dimension in its own table; `cylinder_sizes`; `tenant_settings` (retest
-  interval); and `scan_sessions` / `scan_batches` / `scan_reads` (raw reads, append-only).
+  trigger); the restricted `item_security` dimension in its own table; `cylinder_sizes`; `tenant_settings` (its retest
+  interval column, like the cylinders' test-date columns, is unused until the maintenance module); and `scan_sessions` / `scan_batches` / `scan_reads` (raw reads, append-only).
 - New organisations start with 6, 13 and 50 kg sizes; the owner adds or retires sizes.
-- Safety (eligible / test due / overdue / quarantined / condemned) is worked out on read from the test dates, the
-  organisation's interval and any hold, because time changes it. An unknown test date counts as due and blocks a full dispatch.
+- Safety is only a hold a person places: eligible, quarantined or condemned. Dates never block a cylinder; inspections
+  and test dates belong to a later maintenance module (agreed 20 Nov 2026).
 - A scan never changes a cylinder's state. Step 4 (handovers) uses the reviewed session list.
 - Routes marked `anyLocation` only check the permission is held somewhere; the service then checks it at the record's
   location (`src/access/require-at.ts`).
@@ -55,13 +55,34 @@ Or run it without `echo` and type the password when asked. Uses `DATABASE_MIGRAT
 | Endpoint | Who |
 |---|---|
 | `GET /cylinder-settings` | `settings.manage`, `item.register` or `item.view_position` |
-| `PUT /cylinder-settings/retest-interval {months \| null}`, `POST /cylinder-settings/sizes {name, nominalFillKg}`, `POST /cylinder-settings/sizes/:id/retire` | `settings.manage` |
+| `POST /cylinder-settings/sizes {name, nominalFillKg}`, `POST /cylinder-settings/sizes/:id/retire` | `settings.manage` |
 | `POST /cylinders` (one) / `POST /cylinders/import` (up to 500, all or nothing, problems reported per row) | `item.register` at `locationId` |
 | `GET /cylinders?locationId&sizeId&physicalState&safety&search&limit&offset` | `item.view_position` or `item.register` there (organisation-wide without `locationId`) |
 | `GET /cylinders/:id`, `GET /cylinders/by-tag/:epc` (any tag it ever had) | the same, at the cylinder's location |
 | `POST /cylinders/:id/tag {epc, reason}` | `item.replace_tag` at the cylinder's location |
 | `POST /scan-sessions {purpose, locationId}`, `POST /scan-sessions/:id/reads {batchId, reads}`, `POST /scan-sessions/:id/close` | the purpose's permission at the location (registration `item.register`, dispatch `dispatch.scan`, stocktake `stocktake.perform`, audit `audit.perform`). Only the device that opened it sends reads; a repeated `batchId` is ignored |
 | `GET /scan-sessions`, `GET /scan-sessions/:id` (reads merged per tag, matched to cylinders) | the purpose's permission or cylinder viewing, at the location |
+
+## Dispatch and returns (Step 4, first part)
+- `migrations/0004_trips.sql`: `trips` (a truck leaving a depot with one driver: loading → out, or cancelled) and
+  `trip_lines` (one cylinder on one load; a cylinder can be live on only one trip, enforced by a unique index).
+- The loader scans tags onto the load. Each tag gets an outcome: added, added with an exception (not at this depot,
+  not full, scanned by a retired tag) or blocked (unknown tag, on hold, scrapped or damaged, on another trip).
+- A depot supervisor approves the exceptions. Separation of duties: whoever opened the trip or loaded a line can't
+  approve it, and an approver can't load or remove lines.
+- The trip's driver signs for the whole load, which is the handover: custody moves to the truck (`custody_kind = 'truck'`,
+  holder = the trip) and `item.dispatched` events are recorded. Returns scanned at the depot move cylinders back
+  (`item.returned`) with their fill state. Handovers to retailers, SMS confirmation and settlement come later.
+- A cylinder on a truck counts as its trip's depot for viewing and for the depot's cylinder list.
+
+| Endpoint | Who |
+|---|---|
+| `GET /trips/drivers?depotId` | `dispatch.scan` at the depot |
+| `POST /trips {depotId, driverId, vehicleReg, note?}`, `POST /trips/:id/load {epcs}` (up to 500), `POST /trips/:id/lines/:itemId/remove`, `POST /trips/:id/return {epcs, physicalState}` | `dispatch.scan` at the trip's depot |
+| `POST /trips/:id/lines/:itemId/approve` | `dispatch.approve_exception` there, and not someone who loaded this trip |
+| `POST /trips/:id/sign` | the trip's driver, with `handover.perform` |
+| `POST /trips/:id/cancel` (only while loading) | `dispatch.scan` or `dispatch.approve_exception` there |
+| `GET /trips?depotId&status`, `GET /trips/:id` | the trip's driver, or a dispatch, settlement or cylinder-viewing permission at the depot |
 
 ## Development database (on the VPS)
 Development and integration tests use the PostgreSQL 16 + PostGIS 3.4 server on the VPS, which also hosts

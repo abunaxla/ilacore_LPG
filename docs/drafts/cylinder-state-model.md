@@ -7,11 +7,11 @@ only through its own events, and all changes are recorded in the append-only `bu
 |---|---|---|
 | **Physical / fill** | empty, filling, full, damaged, scrapped | Filling, QC, returns |
 | **Custody / location** | at depot, on truck *T*, at wholesaler *W*, at retailer *R*, with end customer, sold outright, missing | Confirmed handovers, outright sales, loss reports |
-| **Safety eligibility** | eligible, retest due, retest overdue, quarantined (QC fail), condemned | QC, requalification, time |
+| **Safety eligibility** | eligible, quarantined (QC fail), condemned | People only (a hold). Test dates join with the maintenance module |
 | **Security** (restricted) | normal, missing, sighted, under investigation, recovered | Loss reports, sightings, cases |
 
 ## Examples
-- A full cylinder on a truck, retest due next month, normally: *full / on truck T12 / eligible / normal*.
+- A full cylinder on a truck, normally: *full / on truck T12 / eligible / normal*.
 - A stolen cylinder returned empty at a shop: *empty / at retailer R / eligible / sighted*.
   Only investigation roles see the security dimension.
 

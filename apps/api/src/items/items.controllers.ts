@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { PHYSICAL_STATES, SAFETY_STATES, SCAN_PURPOSES, TAG_RETIRE_REASONS, type Permission } from '@ilacore/domain';
 import type { Request } from 'express';
 import { z } from 'zod';
@@ -28,8 +28,6 @@ const Cylinder = z.object({
   manufacturer: z.string().max(120).optional(),
   manufacturedOn: date,
   tareKg: z.number().optional(),
-  lastTestOn: date,
-  nextTestDue: date,
   physicalState: z.enum(['empty', 'full']).optional(),
 });
 const RegisterBody = Cylinder.extend({ locationId: z.uuid() });
@@ -44,7 +42,6 @@ const ListQuery = z.object({
   offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
 });
 const ReplaceTagBody = z.object({ epc: z.string().min(1).max(80), reason: z.enum(TAG_RETIRE_REASONS) });
-const IntervalBody = z.object({ months: z.number().int().min(1).max(240).nullable() });
 const SizeBody = z.object({ name: z.string().min(1).max(30), nominalFillKg: z.number() });
 const OpenSessionBody = z.object({ purpose: z.enum(SCAN_PURPOSES), locationId: z.uuid(), note: z.string().max(200).optional() });
 const ReadsBody = z.object({
@@ -61,7 +58,7 @@ const ReadsBody = z.object({
     .max(500),
 });
 
-/** Cylinder sizes and the retest interval. Everyone who works with cylinders can read them; the owner changes them. */
+/** Cylinder sizes. Everyone who works with cylinders can read them; the owner changes them. */
 @Controller('cylinder-settings')
 export class CylinderSettingsController {
   constructor(@Inject(SizesService) private readonly sizes: SizesService) {}
@@ -70,13 +67,6 @@ export class CylinderSettingsController {
   @RequirePermission(['settings.manage', ...VIEW], { anyLocation: true })
   get(@Auth() ctx: AuthContext) {
     return this.sizes.settings(ctx);
-  }
-
-  @Put('retest-interval')
-  @HttpCode(204)
-  @RequirePermission('settings.manage')
-  async interval(@Auth() ctx: AuthContext, @Req() req: Request, @Body() raw: unknown) {
-    await this.sizes.setRetestInterval(ctx, parseBody(IntervalBody, raw).months, requestMeta(req));
   }
 
   @Post('sizes')

@@ -6,7 +6,7 @@ import { Loading } from '@/components/page-shell';
 import { getMessages } from '@/i18n';
 import { hasAny, requireMe } from '@/lib/auth';
 import { load } from '../../admin/data';
-import { addSizeAction, retireSizeAction, setRetestIntervalAction } from '../../cylinders/actions';
+import { addSizeAction, retireSizeAction } from '../../cylinders/actions';
 import type { CylinderSettings } from '../../cylinders/data';
 
 export default function CylinderSettingsPage() {
@@ -27,7 +27,7 @@ async function Settings() {
 
   return (
     <AppFrame me={me} title={s.title}>
-      <section aria-labelledby="sizes" className="mb-10">
+      <section aria-labelledby="sizes">
         <h2 id="sizes" className="mb-2 text-2xl font-bold">{s.sizes}</h2>
         <p className="mb-4">{s.sizesIntro}</p>
         <ul className="mb-6 flex flex-col gap-3">
@@ -53,23 +53,6 @@ async function Settings() {
         </div>
       </section>
 
-      <section aria-labelledby="interval" className="rounded-md border-2 border-current p-4">
-        <h2 id="interval" className="mb-2 text-2xl font-bold">{s.interval}</h2>
-        <p className="mb-2">{s.intervalIntro}</p>
-        {settings.retestIntervalMonths === null ? <p className="mb-4 font-semibold">{s.intervalNotSet}</p> : null}
-        <ActionForm action={setRetestIntervalAction} label={s.saveInterval} working={t.admin.working}>
-          <Field
-            name="months"
-            label={s.months}
-            hint={s.monthsHint}
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={3}
-            defaultValue={settings.retestIntervalMonths ?? ''}
-            autoComplete="off"
-          />
-        </ActionForm>
-      </section>
     </AppFrame>
   );
 }

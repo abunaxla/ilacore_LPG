@@ -78,6 +78,14 @@ Each one links to the document with the detail. Change a decision here first, th
 - Five wrong attempts lock the account for 15 minutes (doubling, up to a day). An administrator can't change their own
   roles, password, MFA or status; another administrator has to.
 
+## Cylinders (agreed 20 November 2026)
+- Sizes start as 6, 13 and 50 kg; the owner can add more.
+- The **RFID tag is the identity** in practice. Stamped serials exist but are hard to read, so they are optional.
+- **Own cylinders only**; other brands are not tracked.
+- **Custody and movement come first.** Inspections, test dates, fill checks and weighing belong to a separate
+  **maintenance module** later. Until then safety is only a hold a person places (quarantined or condemned);
+  dates never block a cylinder.
+
 ## Stack ([ADR 0001](adr/0001-stack.md))
 - TypeScript; PostgreSQL + PostGIS; Drizzle ORM with SQL migrations; NestJS; Next.js with Tailwind and shadcn/ui;
   Redis + BullMQ; S3-compatible storage; Docker. Deployed to the owner's VPS.
