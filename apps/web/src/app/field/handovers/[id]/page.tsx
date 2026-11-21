@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { connection } from 'next/server';
 import { Suspense } from 'react';
 import { ActionForm } from '@/components/action-form';
 import { buttonClass, Field, secondaryButtonClass } from '@/components/fields';
@@ -60,6 +61,8 @@ async function FieldHandover({ params }: { params: Params }) {
       </FieldFrame>
     );
   }
+  // The owed due date is measured from today, so this page is always rendered at request time.
+  await connection();
   const h = reply.data;
   const b = h.balance;
   const out = h.lines.filter((l) => l.direction === 'out');
@@ -111,7 +114,7 @@ async function FieldHandover({ params }: { params: Params }) {
               {out.map((l) => (
                 <li key={l.itemId} className="rounded-md border-2 border-current p-3">
                   <p className="mb-2">
-                    {l.cylinder.serial ?? '—'} · {l.cylinder.size}
+                    {l.cylinder.serial ?? `…${l.epc.slice(-6)}`} · {l.cylinder.size}
                     {l.soldOutright ? <span className="font-semibold"> · {f.bought}</span> : null}
                   </p>
                   <div className="flex flex-wrap gap-3">
@@ -131,7 +134,7 @@ async function FieldHandover({ params }: { params: Params }) {
             <ul className="flex flex-col gap-2">
               {ins.map((l) => (
                 <li key={l.itemId} className="flex flex-wrap items-center justify-between gap-3 rounded-md border-2 border-current p-3">
-                  <span>{l.cylinder.serial ?? '—'} · {l.cylinder.size}</span>
+                  <span>{l.cylinder.serial ?? `…${l.epc.slice(-6)}`} · {l.cylinder.size}</span>
                   <ActionForm action={removeLineAction.bind(null, h.id, l.itemId)} label={f.remove} working="…" secondary />
                 </li>
               ))}
