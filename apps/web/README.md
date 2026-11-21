@@ -49,7 +49,8 @@ Working with no signal (production builds only; the service worker is not regist
 - Everything else needs signal and is decided by the server when it happens: bought, empties owed, sending the shop
   the code and entering it. Custody therefore only moves once the server has checked the shop's code.
 
-Not done yet: the app manifest and icons, loader screens.
+Loading: every handheld page loads into the handheld frame with the outbox status (waiting to send, sending, all sent)
+and says when the signal is weak. Not done yet: the app manifest and icons.
 
 ## Running it
 Needs the API running (see `apps/api/README.md`, including the SSH tunnel to the database).
