@@ -108,7 +108,7 @@ Or run it without `echo` and type the password when asked. Uses `DATABASE_MIGRAT
 | `POST /customers {kind, name, phone, area?, billedThrough?}`, `GET /customers/:id`, `POST /customers/:id/phone-check`, `POST /customers/:id/phone-check/verify {code}` | `customer.manage`, organisation-wide |
 | `GET /customers?search&kind`, `GET /customers/by-label/:code` | `customer.manage` or `handover.perform` (phone numbers only for `customer.manage`) |
 | `GET /sms/stand-in` | `customer.manage` or `settings.manage`, organisation-wide |
-| `POST /trips/:tripId/handovers {customerId}` and, on the handover, `out`/`in {epcs}`, `lines/:itemId/remove`, `lines/:itemId/sold {sold}`, `owed {dueOn}`, `request-confirmation {acceptShortfall?}`, `resend-code`, `confirm {code}`, `dispute {note}`, `cancel` | the trip's driver |
+| `POST /trips/:tripId/handovers {customerId, id?}` (a handheld may choose `id`, for starts made with no signal: the same start sent twice returns the same handover; an `id` used for anything else is `handover_id_taken`) and, on the handover, `out`/`in {epcs}`, `lines/:itemId/remove`, `lines/:itemId/sold {sold}`, `owed {dueOn}`, `request-confirmation {acceptShortfall?}`, `resend-code`, `confirm {code}`, `dispute {note}`, `cancel` | the trip's driver |
 | `POST /handovers/:id/owed/approve` | `handover.approve_exception` at the trip's depot, not the driver |
 | `GET /handovers/:id` | the driver, or a trip-viewing permission at the depot |
 

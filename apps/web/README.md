@@ -37,7 +37,19 @@ the RFID reader is chosen). Its cookies are scoped to `/field` and never mix wit
 | Handover: scan fulls out and empties in, mark bought, ask for empties owed, send the code, enter the shop's code, resend once, record a dispute, cancel | `/field/handovers/:id` | The trip's driver |
 
 Scanning is a text box for now: a reader that types like a keyboard sends each tag and Enter. The RFID reader
-adapter plugs in there once the reader is chosen. Not done yet: offline use, the app manifest and icons, loader screens.
+adapter plugs in there once the reader is chosen.
+
+Working with no signal (production builds only; the service worker is not registered by `next dev`):
+- `public/field-sw.js` keeps a copy of each `/field` page last opened with signal, the app's static files, and
+  `/field/offline-handover` (the screen for a handover started with no signal). Signing out forgets the page copies.
+- Starting a handover and scanning go through the handheld's outbox (`src/lib/field-outbox.ts`, IndexedDB) and are
+  sent in order through `/field/sync` when there is signal. A start carries an id chosen on the handheld, so sending it
+  twice is one handover; a tag sent twice comes back "already scanned". Refusals are shown as "could not be sent".
+- Shops are kept on the handheld (`/field/shops`, no numbers) so a shop can be found with no signal.
+- Everything else needs signal and is decided by the server when it happens: bought, empties owed, sending the shop
+  the code and entering it. Custody therefore only moves once the server has checked the shop's code.
+
+Not done yet: the app manifest and icons, loader screens.
 
 ## Running it
 Needs the API running (see `apps/api/README.md`, including the SSH tunnel to the database).

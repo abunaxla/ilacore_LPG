@@ -15,11 +15,11 @@ import {
   disputeAction,
   removeLineAction,
   resendCodeAction,
-  scanAction,
   sendCodeAction,
   setBoughtAction,
 } from '../../actions';
 import { FieldFrame } from '../../field-frame';
+import { PendingHandover } from './pending-handover';
 import { ScanForm } from './scan-form';
 import { SendCodeForm } from './send-code-form';
 
@@ -53,6 +53,14 @@ async function FieldHandover({ params }: { params: Params }) {
   const f = getMessages().field;
   const { id } = await params;
   const reply = await api<HandoverDetail>(`/handovers/${encodeURIComponent(id)}`, { token });
+  // Started on this handheld with no signal and not sent yet: the handheld knows it, the server does not.
+  if (reply.status === 404) {
+    return (
+      <FieldFrame name={me.displayName} title={f.pendingTitle}>
+        <PendingHandover id={id} />
+      </FieldFrame>
+    );
+  }
   if (!reply.ok) {
     return (
       <FieldFrame name={me.displayName} title={f.handOver}>
@@ -104,7 +112,7 @@ async function FieldHandover({ params }: { params: Params }) {
       {h.status === 'open' ? (
         <>
           <section aria-label={f.scanTitle} className="mb-6">
-            <ScanForm action={scanAction.bind(null, h.id)} />
+            <ScanForm handoverId={h.id} />
           </section>
 
           <section aria-labelledby="lines" className="mb-6">

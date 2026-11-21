@@ -1,64 +1,55 @@
 'use client';
 
-import { startTransition, useActionState, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { buttonClass } from '@/components/fields';
-import { FormMessage } from '@/components/form-bits';
 import { getMessages } from '@/i18n';
-import type { ScanState } from '../../actions';
-
-type Direction = 'out' | 'in';
+import { CHANGED, enqueue, getResults, listOps, type Direction, type ScanResults } from '@/lib/field-outbox';
 
 /**
- * Scanning for a handover. A reader that types like a keyboard sends each tag followed by Enter, often faster
- * than the server answers. So the box never waits: each Enter moves the tags into a queue at once (with the
- * direction chosen at that moment) and the box is empty and focused for the next tag. The queue is sent one
- * batch at a time. The RFID reader plugs in here once it is chosen.
+ * Scanning for a handover. Each Enter puts the tags in the handheld's outbox with the direction chosen at that
+ * moment and empties the box at once, so a reader that types like a keyboard is never slowed down and nothing is
+ * lost with no signal. What came back (added, and every warning) is shown as it arrives; scans not sent yet are
+ * counted separately because the balance does not include them. The RFID reader plugs in here once it is chosen.
  */
-export function ScanForm({ action }: { action: (prev: ScanState, fd: FormData) => Promise<ScanState> }) {
+export function ScanForm({ handoverId, refreshOnSend = true }: { handoverId: string; refreshOnSend?: boolean }) {
   const f = getMessages().field;
-  const [state, dispatch, pending] = useActionState<ScanState, FormData>(action, {});
+  const router = useRouter();
   const [direction, setDirection] = useState<Direction>('out');
-  const [waiting, setWaiting] = useState(0);
-  const queue = useRef<{ direction: Direction; tags: string }[]>([]);
+  const [results, setResults] = useState<ScanResults>({ handoverId, added: 0, outcomes: [] });
+  const [unsent, setUnsent] = useState(0);
   const box = useRef<HTMLInputElement>(null);
+  const lastUnsent = useRef(0);
 
-  // Sends the next batch: every queued entry with the same direction as the first one.
-  const flush = () => {
-    const first = queue.current[0];
-    if (!first) return;
-    const batch = queue.current.filter((q) => q.direction === first.direction);
-    queue.current = queue.current.filter((q) => q.direction !== first.direction);
-    setWaiting(queue.current.length);
-    const fd = new FormData();
-    fd.set('direction', first.direction);
-    fd.set('tags', batch.map((q) => q.tags).join('\n'));
-    startTransition(() => dispatch(fd));
-  };
-
-  // When a batch comes back, send whatever was scanned meanwhile.
   useEffect(() => {
-    if (!pending && queue.current.length > 0) flush();
-    // flush only reads refs and stable setters.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending]);
+    const update = async () => {
+      const [r, ops] = await Promise.all([getResults(handoverId), listOps()]);
+      const n = ops.filter((o) => o.kind === 'scan' && o.handoverId === handoverId && !o.failed).reduce((sum, o) => sum + (o.kind === 'scan' ? o.epcs.length : 0), 0);
+      setResults(r);
+      setUnsent(n);
+      // Something was just sent: show the new lines and balance.
+      if (refreshOnSend && n < lastUnsent.current) router.refresh();
+      lastUnsent.current = n;
+    };
+    void update();
+    window.addEventListener(CHANGED, update);
+    return () => window.removeEventListener(CHANGED, update);
+  }, [handoverId, refreshOnSend, router]);
 
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const input = box.current;
-    const tags = input?.value.trim() ?? '';
+    const epcs = [...new Set((input?.value ?? '').toUpperCase().split(/[\s,;]+/).filter(Boolean))];
     if (input) {
       input.value = '';
       input.focus();
     }
-    if (!tags) return;
-    queue.current.push({ direction, tags });
-    setWaiting(queue.current.length);
-    if (!pending) flush();
+    if (epcs.length > 0) void enqueue({ kind: 'scan', handoverId, direction, epcs });
   };
 
-  const notable = state.outcomes ?? [];
+  const notable = results.outcomes;
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4">
+    <form onSubmit={submit} data-offline-ok className="flex flex-col gap-4">
       <div role="group" aria-labelledby="scan-direction">
         <p id="scan-direction" className="mb-2 font-semibold">{f.scanTitle}</p>
         <div className="flex gap-2">
@@ -78,10 +69,9 @@ export function ScanForm({ action }: { action: (prev: ScanState, fd: FormData) =
           ))}
         </div>
       </div>
-      <FormMessage state={{ ...(state.error ? { error: state.error } : {}) }} />
-      <div role="status" className={state.added || notable.length || pending ? 'rounded-md border-2 border-dashed border-current p-3' : ''}>
-        {pending || waiting > 0 ? <p>{f.scanningNow}</p> : null}
-        {state.added ? <p className="font-semibold">{f.outcomes['added']} ({state.added})</p> : null}
+      <div role="status" className={results.added || notable.length || unsent ? 'rounded-md border-2 border-dashed border-current p-3' : ''}>
+        {unsent > 0 ? <p className="font-semibold">⚠ {f.notCountedYet(unsent)}</p> : null}
+        {results.added ? <p className="font-semibold">{f.outcomes['added']} ({results.added})</p> : null}
         {notable.length > 0 ? (
           <ul>
             {notable.map((o, i) => (

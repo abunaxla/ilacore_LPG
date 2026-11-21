@@ -115,10 +115,25 @@ function uncoveredOf(fullOut: number, emptyIn: number, soldOutright: number): nu
 export class HandoversService {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
 
-  /** The trip's driver starts a handover to a customer. */
-  async open(actor: AuthContext, tripId: string, customerId: string, meta: RequestMeta): Promise<{ id: string; ref: string }> {
+  /**
+   * The trip's driver starts a handover to a customer. A handheld may choose the id itself (it does so when the
+   * handover was started with no signal and is sent later): sending the same start twice returns the same
+   * handover, and an id already used for anything else is refused.
+   */
+  async open(actor: AuthContext, tripId: string, customerId: string, meta: RequestMeta, clientId?: string): Promise<{ id: string; ref: string }> {
     return withTenant(this.pool, actor.tenantId, async (c) => {
       await this.expireStale(c);
+      if (clientId) {
+        const seen = await c.query<{ trip_id: string; customer_id: string; giver_id: string; ref: string }>(
+          'SELECT trip_id, customer_id, giver_id, ref FROM handovers WHERE id = $1',
+          [clientId],
+        );
+        const s = seen.rows[0];
+        if (s) {
+          if (s.trip_id === tripId && s.customer_id === customerId && s.giver_id === actor.userId) return { id: clientId, ref: s.ref };
+          throw apiError(HttpStatus.CONFLICT, 'handover_id_taken', 'That handover id is already in use.');
+        }
+      }
       const trip = await c.query<{ driver_id: string; depot_id: string; status: string }>(
         'SELECT driver_id, depot_id, status FROM trips WHERE id = $1 FOR UPDATE',
         [tripId],
@@ -137,8 +152,9 @@ export class HandoversService {
       if ((live.rowCount ?? 0) > 0) throw apiError(HttpStatus.CONFLICT, 'handover_in_progress', 'Finish the handover in progress first.');
       const ref = String(randomInt(1000, 10000));
       const r = await c.query<{ id: string }>(
-        `INSERT INTO handovers (tenant_id, trip_id, customer_id, giver_id, ref) VALUES (current_tenant_id(), $1, $2, $3, $4) RETURNING id`,
-        [tripId, customerId, actor.userId, ref],
+        `INSERT INTO handovers (id, tenant_id, trip_id, customer_id, giver_id, ref)
+         VALUES (COALESCE($5::uuid, gen_random_uuid()), current_tenant_id(), $1, $2, $3, $4) RETURNING id`,
+        [tripId, customerId, actor.userId, ref, clientId ?? null],
       );
       const id = r.rows[0]!.id;
       await recordAudit(c, { action: 'handover.opened', actorId: actor.userId, deviceId: actor.deviceId ?? undefined, targetType: 'handover', targetId: id, details: { tripId, customerId }, ...meta });

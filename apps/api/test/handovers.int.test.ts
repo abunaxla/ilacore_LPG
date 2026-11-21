@@ -367,6 +367,19 @@ describe('a handover from the truck', () => {
     expect((await custody(fulls[4]!.id)).custody_kind).toBe('truck');
   });
 
+  it('treats a handover started offline and sent twice as one, and refuses its id for anything else', async () => {
+    const id = randomUUID();
+    const first = await call('POST', `/trips/${trip}/handovers`, { token: driver, body: { customerId: shop, id } });
+    expect(first.body).toMatchObject({ id });
+    const again = await call('POST', `/trips/${trip}/handovers`, { token: driver, body: { customerId: shop, id } });
+    expect(again.body).toEqual(first.body);
+    expect((await call('POST', `/trips/${trip}/handovers`, { token: driver, body: { customerId: wholesaler, id } })).body.error).toBe('handover_id_taken');
+    // A scan sent again after a lost reply is harmless.
+    await call('POST', `/handovers/${id}/out`, { token: driver, body: { epcs: [fulls[4]!.epc] } });
+    expect((await call('POST', `/handovers/${id}/out`, { token: driver, body: { epcs: [fulls[4]!.epc] } })).body.outcomes[0].result).toBe('already_scanned');
+    await call('POST', `/handovers/${id}/cancel`, { token: driver });
+  });
+
   it('closes a handover as unconfirmed when the 15 minutes pass; custody stays with the driver', async () => {
     const h = (await call('POST', `/trips/${trip}/handovers`, { token: driver, body: { customerId: shop } })).body.id as string;
     await call('POST', `/handovers/${h}/out`, { token: driver, body: { epcs: [fulls[4]!.epc] } });

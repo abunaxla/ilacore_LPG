@@ -77,35 +77,6 @@ export async function signLoadAction(tripId: string): Promise<FormState> {
   return simple(`/trips/${enc(tripId)}/sign`);
 }
 
-export async function startHandoverAction(tripId: string, customerId: string): Promise<FormState> {
-  const reply = await send<{ id: string }>(`/trips/${enc(tripId)}/handovers`, { customerId });
-  if (!reply.ok) return { error: reply.error };
-  redirect(`/field/handovers/${enc(reply.data.id)}`);
-}
-
-export interface ScanState extends FormState {
-  /** Tags added since this screen opened. */
-  added?: number;
-  /** Everything that was not simply added, newest first (the last 20), so no warning is overwritten. */
-  outcomes?: { epc: string; result: string; reason?: string }[];
-}
-
-export async function scanAction(handoverId: string, prev: ScanState, fd: FormData): Promise<ScanState> {
-  const direction = text(fd, 'direction') === 'in' ? 'in' : 'out';
-  const epcs = [...new Set(text(fd, 'tags').toUpperCase().split(/[\s,;]+/).filter(Boolean))];
-  const kept = { ...(prev.added ? { added: prev.added } : {}), ...(prev.outcomes ? { outcomes: prev.outcomes } : {}) };
-  if (epcs.length === 0) return kept;
-  const reply = await send<{ outcomes: NonNullable<ScanState['outcomes']> }>(`/handovers/${enc(handoverId)}/${direction}`, { epcs });
-  if (!reply.ok) return { ...kept, error: reply.error };
-  refresh();
-  const outcomes = reply.data.outcomes ?? [];
-  const added = outcomes.filter((o) => o.result === 'added').length;
-  return {
-    added: (prev.added ?? 0) + added,
-    outcomes: [...outcomes.filter((o) => o.result !== 'added').reverse(), ...(prev.outcomes ?? [])].slice(0, 20),
-  };
-}
-
 export async function removeLineAction(handoverId: string, itemId: string): Promise<FormState> {
   return simple(`/handovers/${enc(handoverId)}/lines/${enc(itemId)}/remove`);
 }

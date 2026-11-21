@@ -11,7 +11,7 @@ import { HandoversService, MAX_TAGS_PER_CALL } from './handovers.service.js';
 const uuid = new ParseUUIDPipe();
 const VIEW: Permission[] = ['handover.perform', 'dispatch.scan', 'dispatch.approve_exception', 'handover.approve_exception', 'route.settle', 'item.view_position'];
 
-const OpenBody = z.object({ customerId: z.uuid() });
+const OpenBody = z.object({ customerId: z.uuid(), id: z.uuid().optional() });
 const TagsBody = z.object({ epcs: z.array(z.string().max(80)).min(1).max(MAX_TAGS_PER_CALL) });
 const SoldBody = z.object({ sold: z.boolean() });
 const OwedBody = z.object({ dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
@@ -31,7 +31,8 @@ export class HandoversController {
   @Post('trips/:tripId/handovers')
   @RequirePermission('handover.perform', { anyLocation: true })
   open(@Auth() ctx: AuthContext, @Req() req: Request, @Param('tripId', uuid) tripId: string, @Body() raw: unknown) {
-    return this.handovers.open(ctx, tripId, parseBody(OpenBody, raw).customerId, requestMeta(req));
+    const body = parseBody(OpenBody, raw);
+    return this.handovers.open(ctx, tripId, body.customerId, requestMeta(req), body.id);
   }
 
   @Get('handovers/:id')
