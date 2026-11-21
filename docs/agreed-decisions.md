@@ -93,6 +93,8 @@ Each one links to the document with the detail. Change a decision here first, th
 - An empty offered back that **isn't ours** (unknown tag or no tag) does **not** count as cover; the tag is noted.
   An empty already on a truck can't be offered back either (it would let a driver balance with his own load).
 - **SMS goes through a stand-in** until a provider is chosen: messages are kept and shown on a test screen, not sent.
+  Provider chosen (21 Nov 2026): **Africa's Talking**, switched on with `SMS_PROVIDER=africastalking`; the stand-in
+  stays the default for development and tests.
   Confirmation in this slice is the **code read to the driver**. Replying YES / NO by SMS needs the provider's
   reply number, so it comes with the provider; until then the driver records a refusal as a dispute.
 - Customers are registered by holders of `customer.manage`, given provisionally to the **finance** role

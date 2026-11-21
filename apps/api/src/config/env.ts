@@ -19,6 +19,18 @@ const EnvSchema = z.object({
   MFA_ISSUER: z.string().min(1).default('ILACORE'),
   /** Send the session cookie only over HTTPS. Defaults to on in production. */
   COOKIE_SECURE: z.enum(['true', 'false']).optional(),
+  /** Where SMS go. 'stand_in' (default) keeps them on a test screen and sends nothing; tests always use it. */
+  SMS_PROVIDER: z.enum(['stand_in', 'africastalking']).default('stand_in'),
+  /** Africa's Talking app username ("sandbox" for their sandbox) and API key. Secrets: never commit real ones. */
+  AT_USERNAME: z.string().min(1).optional(),
+  AT_API_KEY: z.string().min(1).optional(),
+  /** Approved sender ID (e.g. ILACORE). Leave unset to use Africa's Talking's shared sender. */
+  AT_SENDER_ID: z.string().min(1).max(11).optional(),
+}).superRefine((env, ctx) => {
+  if (env.SMS_PROVIDER !== 'africastalking') return;
+  for (const key of ['AT_USERNAME', 'AT_API_KEY'] as const) {
+    if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: 'required when SMS_PROVIDER=africastalking' });
+  }
 });
 
 export type Env = z.infer<typeof EnvSchema>;

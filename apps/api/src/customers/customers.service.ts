@@ -10,7 +10,7 @@ import type { RequestMeta } from '../http/request.js';
 import type { AuthContext } from '../identity/auth-context.js';
 import { apiError } from '../identity/errors.js';
 import { hashSecret, verifySecret } from '../identity/hashing.js';
-import { CODE_WINDOW_MS, MAX_CODE_ATTEMPTS, sendSms } from './sms.js';
+import { CODE_WINDOW_MS, MAX_CODE_ATTEMPTS, SmsService } from './sms.js';
 
 export type CustomerKind = 'retailer' | 'wholesaler';
 
@@ -63,7 +63,10 @@ export const newSmsCode = () => String(randomInt(0, 1_000_000)).padStart(6, '0')
 /** Retailers and wholesalers, their registered number (verified by SMS code) and their billing link. */
 @Injectable()
 export class CustomersService {
-  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(SmsService) private readonly sms: SmsService,
+  ) {}
 
   /** Registers a customer and sends the check code to their number (the guard checked customer.manage). */
   async register(
@@ -193,11 +196,12 @@ export class CustomersService {
       `UPDATE customers SET phone_code_hash = $2, phone_code_expires_at = $3, phone_code_attempts = 0 WHERE id = $1`,
       [id, await hashSecret(code), new Date(Date.now() + CODE_WINDOW_MS)],
     );
-    await sendSms(c, {
+    await this.sms.send(c, {
       customerId: id,
       purpose: 'phone_check',
       to: phone,
       body: `ILACORE: ${name} is being registered for gas deliveries. Give this code to the person registering you: ${code}. It works for 15 minutes.`,
+      secret: code,
     });
   }
 

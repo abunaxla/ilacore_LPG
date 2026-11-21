@@ -88,8 +88,19 @@ Or run it without `echo` and type the password when asked. Uses `DATABASE_MIGRAT
 - `migrations/0005_handovers.sql`: `customers` (retailers and wholesalers, each with a 6-character label code and a
   phone number that must be checked by SMS code), `handovers`, `handover_lines`, `handover_foreign_tags`,
   `sms_messages`, and `trip_lines.delivered_at` / `delivered_in` / `collected_in`.
-- **SMS stand-in.** No provider is connected: every SMS is stored with status `stand_in` and listed at
-  `GET /sms/stand-in` instead of being sent. Codes are 6 digits, hashed, valid 15 minutes, 5 tries.
+- **SMS.** Codes are 6 digits, hashed, valid 15 minutes, 5 tries. `SMS_PROVIDER` picks where messages go
+  (`src/customers/sms.ts`):
+  - `stand_in` (default, and always in tests): stored with status `stand_in` and listed at `GET /sms/stand-in`;
+    nothing is sent.
+  - `africastalking`: sent through Africa's Talking (`AT_USERNAME`, `AT_API_KEY`, optional `AT_SENDER_ID`; the
+    username `sandbox` uses their sandbox). Kept as `sent` with the code blanked out. Text is kept to the GSM
+    alphabet (curly quotes, accents and emoji would cut each part from 160 to 70 characters).
+  - Sending happens inside the request's transaction. Lost connections, timeouts and gateway errors are retried
+    (3 tries, same text). If it still fails, the request fails and rolls back: no code is stored and the one resend
+    is not used up, so the driver or office just presses send again. Errors: `sms_failed` (try again),
+    `sms_refused` (the number can't take our SMS), `sms_unavailable` (wrong key, no balance: the office fixes it).
+  - There is no queue on purpose: a code is only useful while the driver is at the shop. The handheld never queues
+    "send the code" with no signal either; it says it needs signal (see apps/web README).
 - A driver opens a handover from a trip that is out, to a shop with a checked number. Fulls are scanned out (only
   ones on this truck), empties scanned in (ours only; another brand's tag is noted, not counted; a cylinder on a
   truck is refused). Every full needs a cover: an empty back, marked as bought outright, or "empties owed" by a

@@ -376,7 +376,7 @@ describe('a handover from the truck', () => {
     expect((await call('POST', `/trips/${trip}/handovers`, { token: driver, body: { customerId: wholesaler, id } })).body.error).toBe('handover_id_taken');
     // A scan sent again after a lost reply is harmless.
     await call('POST', `/handovers/${id}/out`, { token: driver, body: { epcs: [fulls[4]!.epc] } });
-    expect((await call('POST', `/handovers/${id}/out`, { token: driver, body: { epcs: [fulls[4]!.epc] } })).body.outcomes[0].result).toBe('already_scanned');
+    expect(((await call('POST', `/handovers/${id}/out`, { token: driver, body: { epcs: [fulls[4]!.epc] } })).body.outcomes as { result: string }[])[0]!.result).toBe('already_scanned');
     await call('POST', `/handovers/${id}/cancel`, { token: driver });
   });
 

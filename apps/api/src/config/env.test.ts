@@ -22,6 +22,13 @@ describe('loadEnv', () => {
     expect(() => loadEnv({})).toThrow(/DATABASE_URL/);
   });
 
+  it("uses the SMS stand-in unless told otherwise, and needs both Africa's Talking settings for real sending", () => {
+    expect(loadEnv(BASE).SMS_PROVIDER).toBe('stand_in');
+    expect(() => loadEnv({ ...BASE, SMS_PROVIDER: 'africastalking', AT_USERNAME: 'sandbox' })).toThrow(/AT_API_KEY/);
+    const env = loadEnv({ ...BASE, SMS_PROVIDER: 'africastalking', AT_USERNAME: 'sandbox', AT_API_KEY: 'k' });
+    expect(env.SMS_PROVIDER).toBe('africastalking');
+  });
+
   it('names the bad setting without echoing its value', () => {
     const secret = 'not-a-url-but-maybe-a-password';
     let message = '';

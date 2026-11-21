@@ -4,7 +4,7 @@ import { randomInt } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { requireAt } from '../access/require-at.js';
 import { newSmsCode } from '../customers/customers.service.js';
-import { CODE_WINDOW_MS, MAX_CODE_ATTEMPTS, sendSms } from '../customers/sms.js';
+import { CODE_WINDOW_MS, MAX_CODE_ATTEMPTS, SmsService } from '../customers/sms.js';
 import { PG_POOL } from '../db/database.module.js';
 import { withTenant } from '../db/tenant-transaction.js';
 import { recordAudit } from '../events/record-audit.js';
@@ -113,7 +113,10 @@ function uncoveredOf(fullOut: number, emptyIn: number, soldOutright: number): nu
  */
 @Injectable()
 export class HandoversService {
-  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(SmsService) private readonly sms: SmsService,
+  ) {}
 
   /**
    * The trip's driver starts a handover to a customer. A handheld may choose the id itself (it does so when the
@@ -498,12 +501,13 @@ export class HandoversService {
     };
     const given = [part('out', false, 'FULL given'), part('out', true, 'BOUGHT'), part('in', false, 'EMPTY taken')].filter(Boolean);
     const owed = h.owed_count ? ` ${h.owed_count} EMPTY owed by ${h.owed_due_on}.` : '';
-    await sendSms(c, {
+    await this.sms.send(c, {
       customerId: h.customer_id,
       handoverId: h.id,
       purpose: 'handover_code',
       to: h.customer_phone,
       body: `ILACORE: ${h.giver_name} (${h.vehicle_reg}) at ${h.customer_name}. ${given.join(', ')}.${owed} Ref ${h.ref}. If correct, give the driver code ${code}. If wrong, tell the driver.`,
+      secret: code,
     });
     return expiresAt;
   }
