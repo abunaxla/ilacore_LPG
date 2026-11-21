@@ -429,6 +429,7 @@ export const en = {
     handOver: 'Hand over to a shop',
     findShop: 'Shop name, area or label',
     find: 'Find',
+    searching: 'Searching…',
     noShops: 'No shop matches.',
     notChecked: '⚠ number not checked yet',
     start: 'Start',
@@ -508,6 +509,10 @@ export const en = {
     endedDisputed: 'Recorded as disputed. Nothing moved; the cylinders are still with you.',
     endedCancelled: 'Cancelled. Nothing moved.',
     notDriver: 'This screen is for drivers.',
+    loading: 'Loading…',
+    loadingSlow: 'The signal is weak, so this is slow. Anything you scanned is kept on this handheld.',
+    allSent: '✓ All sent',
+    sendingLeft: (n: number) => `Sending… ${n} left`,
     // Working without signal.
     offline: 'No signal. Scans are kept on this handheld and sent when the signal is back.',
     waiting: (n: number) => (n === 1 ? '1 item waiting to send' : `${n} items waiting to send`),

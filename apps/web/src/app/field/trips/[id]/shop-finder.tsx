@@ -16,6 +16,7 @@ export function ShopFinder({ tripId }: { tripId: string }) {
   const [fromSaved, setFromSaved] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [starting, setStarting] = useState<string | undefined>();
+  const [searching, setSearching] = useState(false);
 
   // Keep the shop list on the handheld while there is signal.
   useEffect(() => {
@@ -30,10 +31,12 @@ export function ShopFinder({ tripId }: { tripId: string }) {
     const q = String(new FormData(e.currentTarget).get('q') ?? '').trim();
     if (!q) return;
     setError(undefined);
+    setSearching(true);
     try {
       const r = await fetch(`/field/shops?q=${encodeURIComponent(q)}`, { cache: 'no-store' });
       if (r.status < 500) {
         const body = await r.json();
+        setSearching(false);
         if (!r.ok) {
           setError(errorText(body.error));
           return;
@@ -45,6 +48,7 @@ export function ShopFinder({ tripId }: { tripId: string }) {
     } catch {
       // No signal: search what is kept here.
     }
+    setSearching(false);
     const needle = q.toLowerCase();
     const all = await savedShops();
     setShops(all.filter((s) => s.name.toLowerCase().includes(needle) || (s.area ?? '').toLowerCase().includes(needle) || s.labelCode === q.toUpperCase()));
@@ -73,11 +77,14 @@ export function ShopFinder({ tripId }: { tripId: string }) {
       <form onSubmit={search} data-offline-ok className="mb-4 flex flex-col gap-3">
         <Field name="q" label={f.findShop} autoComplete="off" required />
         <div>
-          <button type="submit" className={buttonClass}>{f.find}</button>
+          <button type="submit" className={buttonClass} disabled={searching}>{searching ? f.searching : f.find}</button>
         </div>
       </form>
       {error ? <p role="alert" className="mb-3 rounded-md border-2 border-current p-3">⚠ {error}</p> : null}
-      {fromSaved ? <p role="status" className="mb-3">{f.savedShops}</p> : null}
+      <div role="status">
+        {searching ? <p className="sr-only">{f.searching}</p> : null}
+        {fromSaved && !searching ? <p className="mb-3">{f.savedShops}</p> : null}
+      </div>
       {shops && shops.length === 0 ? <p role="status">{f.noShops}</p> : null}
       {shops && shops.length > 0 ? (
         <ul className="flex flex-col gap-3">

@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { connection } from 'next/server';
 import { Suspense } from 'react';
+import { FieldLoading } from '../../field-loading';
 import { ActionForm } from '@/components/action-form';
 import { buttonClass, Field, secondaryButtonClass } from '@/components/fields';
-import { Loading } from '@/components/page-shell';
 import { errorText, getMessages } from '@/i18n';
 import { api } from '@/lib/api';
 import { requireFieldMe } from '@/lib/field-session';
@@ -42,7 +42,7 @@ const kenyaDate = (days: number) =>
 
 export default function FieldHandoverPage({ params }: { params: Params }) {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<FieldLoading />}>
       <FieldHandover params={params} />
     </Suspense>
   );

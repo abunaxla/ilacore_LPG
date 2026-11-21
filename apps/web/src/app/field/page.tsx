@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { Loading } from '@/components/page-shell';
+import { FieldLoading } from './field-loading';
 import { getMessages } from '@/i18n';
 import { api } from '@/lib/api';
 import { requireFieldMe } from '@/lib/field-session';
@@ -10,7 +10,7 @@ import { FieldFrame } from './field-frame';
 /** The driver's start screen: their trips that are being loaded or are out. */
 export default function FieldHome() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<FieldLoading />}>
       <Trips />
     </Suspense>
   );

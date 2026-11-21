@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { secondaryButtonClass } from '@/components/fields';
 import { errorText, getMessages } from '@/i18n';
 import { CHANGED, dismiss, listOps, markOffline, sync, syncState, type Op, type SyncState } from '@/lib/field-outbox';
@@ -14,6 +14,9 @@ export function Connection() {
   const [ops, setOps] = useState<Op[]>([]);
   const [state, setState] = useState<SyncState>('idle');
   const [blocked, setBlocked] = useState(false);
+  const [justSent, setJustSent] = useState(false);
+  const lastWaiting = useRef(0);
+  const sentTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
@@ -22,7 +25,17 @@ export function Connection() {
     const update = () => {
       setState(syncState());
       if (syncState() !== 'offline') setBlocked(false);
-      void listOps().then(setOps);
+      void listOps().then((list) => {
+        // The outbox has just emptied: say so briefly, so the driver knows it all went.
+        const waiting = list.filter((o) => !o.failed).length;
+        if (lastWaiting.current > 0 && waiting === 0) {
+          setJustSent(true);
+          window.clearTimeout(sentTimer.current);
+          sentTimer.current = window.setTimeout(() => setJustSent(false), 4000);
+        }
+        lastWaiting.current = waiting;
+        setOps(list);
+      });
     };
     // Anything that needs the server (sending the code, entering it, approvals…) is stopped with a plain message
     // when there is known to be no signal, instead of hanging. Forms that work without signal say so.
@@ -51,13 +64,13 @@ export function Connection() {
       window.removeEventListener('submit', guard, true);
       document.removeEventListener('visibilitychange', send);
       window.clearInterval(timer);
+      window.clearTimeout(sentTimer.current);
     };
   }, []);
 
   const waiting = ops.filter((o) => !o.failed);
   const failed = ops.filter((o) => o.failed);
-  if (state !== 'offline' && state !== 'signin' && waiting.length === 0 && failed.length === 0) return null;
-
+  if (state !== 'offline' && state !== 'signin' && waiting.length === 0 && failed.length === 0 && !justSent) return null;
 
   const describe = (o: Op) => (o.kind === 'start' ? f.opStart(o.shopName) : f.opScan(o.direction, o.epcs.length));
   return (
@@ -69,8 +82,10 @@ export function Connection() {
         <div role="status" className="rounded-md border-2 border-dashed border-current p-3">
           {state === 'offline' ? <p className="font-semibold">⚠ {f.offline}</p> : null}
           {state === 'signin' ? <p className="font-semibold">⚠ {f.signInToSend}</p> : null}
-          {waiting.length > 0 ? <p>{state === 'sending' ? f.sending : f.waiting(waiting.length)}</p> : null}
+          {waiting.length > 0 ? <p>{state === 'sending' ? f.sendingLeft(waiting.length) : f.waiting(waiting.length)}</p> : null}
         </div>
+      ) : justSent ? (
+        <p role="status" className="rounded-md border-2 border-current p-3 font-semibold">{f.allSent}</p>
       ) : null}
       {failed.length > 0 ? (
         <div role="alert" className="rounded-md border-2 border-current p-3">

@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
+import { FieldLoading } from '../field-loading';
 import { ActionForm } from '@/components/action-form';
 import { Field, secondaryButtonClass } from '@/components/fields';
-import { Loading } from '@/components/page-shell';
 import { getMessages } from '@/i18n';
 import { getDeviceCredential } from '@/lib/field-session';
 import { fieldSignInAction, unpairAction } from '../actions';
@@ -10,7 +10,7 @@ import { FieldFrame } from '../field-frame';
 
 export default function FieldSignInPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<FieldLoading />}>
       <FieldSignIn />
     </Suspense>
   );

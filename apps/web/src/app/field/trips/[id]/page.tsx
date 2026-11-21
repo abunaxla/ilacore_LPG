@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { FieldLoading } from '../../field-loading';
 import { ActionForm } from '@/components/action-form';
 import { buttonClass } from '@/components/fields';
-import { Loading } from '@/components/page-shell';
 import { errorText, getMessages } from '@/i18n';
 import { api } from '@/lib/api';
 import { requireFieldMe } from '@/lib/field-session';
@@ -15,7 +15,7 @@ type Params = Promise<{ id: string }>;
 
 export default function FieldTripPage({ params }: { params: Params }) {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<FieldLoading />}>
       <FieldTrip params={params} />
     </Suspense>
   );
