@@ -18,12 +18,19 @@ export interface ApiReply<T> {
 
 export async function api<T = Record<string, unknown>>(
   path: string,
-  options: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; token?: string | undefined } = {},
+  options: {
+    method?: 'GET' | 'POST' | 'PUT';
+    body?: unknown;
+    token?: string | undefined;
+    /** A handheld's device credential, for device sign-in only. */
+    device?: string | undefined;
+  } = {},
 ): Promise<ApiReply<T>> {
   const incoming = await headers();
   const outgoing: Record<string, string> = { accept: 'application/json' };
   if (options.body !== undefined) outgoing['content-type'] = 'application/json';
   if (options.token) outgoing['authorization'] = `Bearer ${options.token}`;
+  else if (options.device) outgoing['authorization'] = `Device ${options.device}`;
   // Pass the person's address and browser on, so the API's rate limits and audit log see them, not this server.
   const forwardedFor = incoming.get('x-forwarded-for');
   if (forwardedFor) outgoing['x-forwarded-for'] = forwardedFor;

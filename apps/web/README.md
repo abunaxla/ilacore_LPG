@@ -24,6 +24,21 @@ How it talks to the API:
   or when `COOKIE_SECURE=true`). Browser JavaScript never sees it.
 - `src/lib/auth.ts` sends people to the step they still owe (MFA set-up, MFA, password change) before anything else.
 
+## Handheld screens (drivers)
+A separate, phone-sized part of the app under `/field`, for the installable field client (agreed: a web app until
+the RFID reader is chosen). Its cookies are scoped to `/field` and never mix with the office session.
+
+| Screen | Path | Who |
+|---|---|---|
+| Set up this handheld: paste the credential from the Handhelds page (kept in an HttpOnly `lpg_device` cookie) | `/field/pair` | Once per handheld |
+| Sign in with phone and PIN (needs the paired credential; session in `lpg_field`) | `/field/sign-in` | Field staff |
+| Your trips | `/field` | Drivers (`handover.perform`) |
+| Trip: sign for the load; find a shop by name, area or label and start a handover | `/field/trips/:id` | The trip's driver |
+| Handover: scan fulls out and empties in, mark bought, ask for empties owed, send the code, enter the shop's code, resend once, record a dispute, cancel | `/field/handovers/:id` | The trip's driver |
+
+Scanning is a text box for now: a reader that types like a keyboard sends each tag and Enter. The RFID reader
+adapter plugs in there once the reader is chosen. Not done yet: offline use, the app manifest and icons, loader screens.
+
 ## Running it
 Needs the API running (see `apps/api/README.md`, including the SSH tunnel to the database).
 ```bash
