@@ -21,6 +21,7 @@ export function AppFrame({ me, title, children }: { me: Me; title: string; child
       label: t.trips.nav,
       show: hasAny(me, ['dispatch.scan', 'dispatch.approve_exception', 'route.settle', 'item.view_position']),
     },
+    { href: '/customers', label: t.customers.nav, show: hasAny(me, ['customer.manage']) },
     { href: '/settings/cylinders', label: t.cylinderSettings.nav, show: hasAny(me, ['settings.manage']) },
     { href: '/admin/users', label: t.admin.users, show: hasAny(me, ['user.manage']) },
     { href: '/admin/devices', label: t.admin.devices, show: hasAny(me, ['device.manage']) },

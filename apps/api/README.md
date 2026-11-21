@@ -72,7 +72,7 @@ Or run it without `echo` and type the password when asked. Uses `DATABASE_MIGRAT
   approve it, and an approver can't load or remove lines.
 - The trip's driver signs for the whole load, which is the handover: custody moves to the truck (`custody_kind = 'truck'`,
   holder = the trip) and `item.dispatched` events are recorded. Returns scanned at the depot move cylinders back
-  (`item.returned`) with their fill state. Handovers to retailers, SMS confirmation and settlement come later.
+  (`item.returned`) with their fill state. Handovers to shops are below; settlement comes later.
 - A cylinder on a truck counts as its trip's depot for viewing and for the depot's cylinder list.
 
 | Endpoint | Who |
@@ -83,6 +83,34 @@ Or run it without `echo` and type the password when asked. Uses `DATABASE_MIGRAT
 | `POST /trips/:id/sign` | the trip's driver, with `handover.perform` |
 | `POST /trips/:id/cancel` (only while loading) | `dispatch.scan` or `dispatch.approve_exception` there |
 | `GET /trips?depotId&status`, `GET /trips/:id` | the trip's driver, or a dispatch, settlement or cylinder-viewing permission at the depot |
+
+## Shops and handovers (Step 4, second part)
+- `migrations/0005_handovers.sql`: `customers` (retailers and wholesalers, each with a 6-character label code and a
+  phone number that must be checked by SMS code), `handovers`, `handover_lines`, `handover_foreign_tags`,
+  `sms_messages`, and `trip_lines.delivered_at` / `delivered_in` / `collected_in`.
+- **SMS stand-in.** No provider is connected: every SMS is stored with status `stand_in` and listed at
+  `GET /sms/stand-in` instead of being sent. Codes are 6 digits, hashed, valid 15 minutes, 5 tries.
+- A driver opens a handover from a trip that is out, to a shop with a checked number. Fulls are scanned out (only
+  ones on this truck), empties scanned in (ours only; another brand's tag is noted, not counted; a cylinder on a
+  truck is refused). Every full needs a cover: an empty back, marked as bought outright, or "empties owed" by a
+  date, which a `handover.approve_exception` holder at the trip's depot approves (not the driver). Anything left
+  is a shortfall the driver must accept, recorded against them.
+- Asking for confirmation freezes the counts and texts the shop the counts and a code. The shop reads the code to
+  the driver. Only then does custody move: fulls to the shop (`item.delivered`), bought ones to the buyer
+  (`item.sold_outright`), empties onto the truck (`item.collected`). Not confirmed in 15 minutes (one fresh code
+  allowed) → `unconfirmed`; the shop says it's wrong → the driver records a dispute. Nothing moves either way.
+  Replies by SMS (YES/NO) wait for a real provider.
+- A shop's empties owed = approved owed counts less extra empties handed back later, never below zero.
+- `customer.manage` is held by finance for now (provisional, see `docs/open-questions.md`).
+
+| Endpoint | Who |
+|---|---|
+| `POST /customers {kind, name, phone, area?, billedThrough?}`, `GET /customers/:id`, `POST /customers/:id/phone-check`, `POST /customers/:id/phone-check/verify {code}` | `customer.manage`, organisation-wide |
+| `GET /customers?search&kind`, `GET /customers/by-label/:code` | `customer.manage` or `handover.perform` (phone numbers only for `customer.manage`) |
+| `GET /sms/stand-in` | `customer.manage` or `settings.manage`, organisation-wide |
+| `POST /trips/:tripId/handovers {customerId}` and, on the handover, `out`/`in {epcs}`, `lines/:itemId/remove`, `lines/:itemId/sold {sold}`, `owed {dueOn}`, `request-confirmation {acceptShortfall?}`, `resend-code`, `confirm {code}`, `dispute {note}`, `cancel` | the trip's driver |
+| `POST /handovers/:id/owed/approve` | `handover.approve_exception` at the trip's depot, not the driver |
+| `GET /handovers/:id` | the driver, or a trip-viewing permission at the depot |
 
 ## Development database (on the VPS)
 Development and integration tests use the PostgreSQL 16 + PostGIS 3.4 server on the VPS, which also hosts

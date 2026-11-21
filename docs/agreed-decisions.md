@@ -86,6 +86,19 @@ Each one links to the document with the detail. Change a decision here first, th
   **maintenance module** later. Until then safety is only a hold a person places (quarantined or condemned);
   dates never block a cylinder.
 
+## Handover, first slice (agreed 21 November 2026)
+- First slice: a **driver hands over to a retailer or wholesaler from a trip that is out**. Wholesaler → retailer,
+  retailer → end customer, invoices and settlement come later.
+- The **depot supervisor** of the trip's depot approves "empties owed" exceptions, while the driver waits.
+- An empty offered back that **isn't ours** (unknown tag or no tag) does **not** count as cover; the tag is noted.
+  An empty already on a truck can't be offered back either (it would let a driver balance with his own load).
+- **SMS goes through a stand-in** until a provider is chosen: messages are kept and shown on a test screen, not sent.
+  Confirmation in this slice is the **code read to the driver**. Replying YES / NO by SMS needs the provider's
+  reply number, so it comes with the provider; until then the driver records a refusal as a dispute.
+- Customers are registered by holders of `customer.manage`, given provisionally to the **finance** role
+  (the accounting design already has finance setting billing links). A customer's number is verified by an SMS code
+  before any handover to them.
+
 ## Stack ([ADR 0001](adr/0001-stack.md))
 - TypeScript; PostgreSQL + PostGIS; Drizzle ORM with SQL migrations; NestJS; Next.js with Tailwind and shadcn/ui;
   Redis + BullMQ; S3-compatible storage; Docker. Deployed to the owner's VPS.

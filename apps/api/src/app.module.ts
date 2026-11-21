@@ -3,6 +3,7 @@ import { AccessModule } from './access/access.module.js';
 import { ConfigModule } from './config/config.module.js';
 import { DatabaseModule } from './db/database.module.js';
 import { HealthController } from './health/health.controller.js';
+import { CustomersModule } from './customers/customers.module.js';
 import { DispatchModule } from './dispatch/dispatch.module.js';
 import { ItemsModule } from './items/items.module.js';
 
@@ -11,7 +12,7 @@ import { ItemsModule } from './items/items.module.js';
  * as they are built; see apps/api/README.md for the planned list.
  */
 @Module({
-  imports: [ConfigModule, DatabaseModule, AccessModule, ItemsModule, DispatchModule],
+  imports: [ConfigModule, DatabaseModule, AccessModule, ItemsModule, DispatchModule, CustomersModule],
   controllers: [HealthController],
 })
 export class AppModule {}

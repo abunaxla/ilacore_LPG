@@ -12,3 +12,4 @@
 | 8 | Who is **senior to finance** for cancelling loss charges | Needed for the `loss.cancel` role |
 | 9 | Is it right that the **depot supervisor** registers cylinders and replaces tags? | Provisional since 20 Nov 2026; no other role held these permissions ([matrix](drafts/permission-matrix.md)) |
 | 10 | Are **serial numbers unique per manufacturer** (not across all manufacturers)? | That is how duplicates are checked today |
+| 11 | Who **registers customers** (`customer.manage`)? | Given provisionally to finance on 21 Nov 2026; there is no sales role yet ([matrix](drafts/permission-matrix.md)) |

@@ -131,6 +131,7 @@ async function Cylinders({ searchParams }: { searchParams: Search }) {
                     <td className="p-2">{c.safetyStates[cyl.safety]}</td>
                     <td className="p-2">
                       {cyl.custody.locationName ??
+                        (cyl.custody.customer && cyl.custody.kind !== 'sold_outright' ? c.atCustomer(cyl.custody.customer.name) : null) ??
                         (cyl.custody.trip
                           ? `${c.custody.truck} ${showPlate(cyl.custody.trip.vehicleReg)}`
                           : c.custody[cyl.custody.kind as keyof typeof c.custody])}

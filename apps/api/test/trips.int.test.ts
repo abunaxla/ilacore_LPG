@@ -277,7 +277,7 @@ describe('a trip from loading to return', () => {
     expect(stillHere.body.custody).toMatchObject({ kind: 'depot', locationId: depotA });
     // The depot's register still shows what its trucks carry.
     const register = await call('GET', `/cylinders?locationId=${depotA}&limit=200`, { cookie: supervisorCookie });
-    expect(register.body.cylinders.map((x: { id: string }) => x.id)).toEqual(expect.arrayContaining([fromB.id, full2.id]));
+    expect((register.body.cylinders as { id: string }[]).map((x) => x.id)).toEqual(expect.arrayContaining([fromB.id, full2.id]));
 
     expect((await call('POST', `/trips/${trip}/load`, { token: loader, body: { epcs: [full2.epc] } })).body.error).toBe('trip_not_loading');
     const events = await withTenant(owner, tenantId, (c) =>

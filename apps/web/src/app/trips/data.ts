@@ -14,7 +14,7 @@ export interface TripSummary {
   openedBy: string;
   openedAt: string;
   signedAt: string | null;
-  counts: { loaded: number; needsApproval: number; back: number; stillOut: number };
+  counts: { loaded: number; needsApproval: number; delivered: number; collected: number; back: number; stillOut: number };
 }
 
 export interface TripLine {
@@ -29,10 +29,30 @@ export interface TripLine {
   removedAt: string | null;
   returnedAt: string | null;
   returnedState: 'empty' | 'full' | null;
+  deliveredAt: string | null;
+  /** An empty picked up from a shop on this trip, not part of the load. */
+  collected: boolean;
+}
+
+export type HandoverStatus = 'open' | 'awaiting_confirmation' | 'confirmed' | 'unconfirmed' | 'disputed' | 'cancelled';
+
+export interface HandoverSummary {
+  id: string;
+  customer: { id: string; name: string; kind: 'retailer' | 'wholesaler' };
+  giver: { id: string; name: string };
+  status: HandoverStatus;
+  ref: string;
+  openedAt: string;
+  closedAt: string | null;
+  balance: { fullOut: number; emptyIn: number; soldOutright: number; uncovered: number };
+  owed: { count: number; dueOn: string; approvedBy: string | null } | null;
+  shortfall: number | null;
+  disputeNote: string | null;
 }
 
 export interface TripDetail extends TripSummary {
   lines: TripLine[];
+  handovers: HandoverSummary[];
 }
 
 /** Who sees trips on the web (drivers and loaders work on the handheld). */

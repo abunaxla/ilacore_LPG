@@ -31,6 +31,8 @@ export const ROLES = {
     permissions: [
       'credit.approve', 'account.stop', 'ledger.post_manual', 'ledger.reconcile', 'period.close',
       'loss.resolve', 'customer.change_phone', 'report.finance',
+      // Provisional (21 Nov 2026): no role held customer.manage; to be confirmed with the owner.
+      'customer.manage',
     ],
     channel: 'web',
   },

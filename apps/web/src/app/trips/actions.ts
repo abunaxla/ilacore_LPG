@@ -25,3 +25,7 @@ export async function approveLineAction(tripId: string, itemId: string): Promise
 export async function cancelTripAction(tripId: string): Promise<FormState> {
   return send(`/trips/${encodeURIComponent(tripId)}/cancel`);
 }
+
+export async function approveOwedAction(handoverId: string): Promise<FormState> {
+  return send(`/handovers/${encodeURIComponent(handoverId)}/owed/approve`);
+}

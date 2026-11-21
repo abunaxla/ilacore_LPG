@@ -63,6 +63,7 @@ async function Cylinder({ params }: { params: Params }) {
           <Row label={c.where}>
             {cs.custody[cyl.custody.kind as keyof typeof cs.custody]}
             {cyl.custody.locationName ? `: ${cyl.custody.locationName}` : ''}
+            {cyl.custody.customer ? `: ${cyl.custody.customer.name}` : ''}
             {cyl.custody.trip ? (
               <>
                 {': '}

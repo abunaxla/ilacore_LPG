@@ -9,8 +9,8 @@ import { requireMe } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { getToken } from '@/lib/session';
 import { groupEpc, showTime } from '../../cylinders/data';
-import { approveLineAction, cancelTripAction } from '../actions';
-import { showPlate, type TripDetail, type TripLine } from '../data';
+import { approveLineAction, approveOwedAction, cancelTripAction } from '../actions';
+import { showPlate, type HandoverSummary, type TripDetail, type TripLine } from '../data';
 
 type Params = Promise<{ id: string }>;
 
@@ -41,7 +41,9 @@ async function Trip({ params }: { params: Params }) {
   // Menus only; the API decides (including separation of duties).
   const canApprove = loading && can(me.roles, 'dispatch.approve_exception', trip.depot.id);
   const canCancel = loading && (canApprove || can(me.roles, 'dispatch.scan', trip.depot.id));
-  const live = trip.lines.filter((l) => !l.removedAt);
+  const canApproveOwed = trip.status === 'out' && can(me.roles, 'handover.approve_exception', trip.depot.id);
+  const live = trip.lines.filter((l) => !l.removedAt && !l.collected);
+  const collected = trip.lines.filter((l) => l.collected);
   const removed = trip.lines.filter((l) => l.removedAt);
 
   const check = (l: TripLine) => {
@@ -50,6 +52,7 @@ async function Trip({ params }: { params: Params }) {
   };
   const where = (l: TripLine) => {
     if (l.returnedAt) return `${s.returned(t.cylinders.physical[l.returnedState ?? 'empty'])} · ${showTime(l.returnedAt)}`;
+    if (l.deliveredAt) return `${s.delivered} · ${showTime(l.deliveredAt)}`;
     return trip.status === 'out' ? s.onTruck : s.notSigned;
   };
 
@@ -66,10 +69,12 @@ async function Trip({ params }: { params: Params }) {
 
       <section aria-labelledby="counts" className="mb-8">
         <h2 id="counts" className="mb-3 text-2xl font-bold">{s.counts}</h2>
-        <dl className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+        <dl className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
           {[
             [s.countLoaded, trip.counts.loaded],
             [s.countWaiting, trip.counts.needsApproval],
+            [s.countDelivered, trip.counts.delivered],
+            [s.countCollected, trip.counts.collected],
             [s.countBack, trip.counts.back],
             [s.countOut, trip.counts.stillOut],
           ].map(([label, n]) => (
@@ -109,6 +114,37 @@ async function Trip({ params }: { params: Params }) {
         )}
       </section>
 
+      {trip.status === 'out' ? (
+        <section aria-labelledby="handovers" className="mb-8">
+          <h2 id="handovers" className="mb-3 text-2xl font-bold">{s.handovers}</h2>
+          {trip.handovers.length === 0 ? (
+            <p>{s.noHandovers}</p>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {trip.handovers.map((h) => (
+                <Handover key={h.id} h={h} canApprove={canApproveOwed} />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
+      {collected.length > 0 ? (
+        <section aria-labelledby="collected" className="mb-8">
+          <h2 id="collected" className="mb-3 text-2xl font-bold">{s.countCollected}</h2>
+          <ul className="list-disc pl-6">
+            {collected.map((l) => (
+              <li key={`${l.itemId}-${l.addedAt}`}>
+                <Link href={`/cylinders/${l.itemId}`} className="underline underline-offset-4">
+                  {l.cylinder.serial ?? s.noSerial} · {l.cylinder.size}
+                </Link>{' '}
+                · {l.returnedAt ? s.returned(t.cylinders.physical[l.returnedState ?? 'empty']) : s.onTruck}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {removed.length > 0 ? (
         <section aria-labelledby="removed" className="mb-8">
           <h2 id="removed" className="mb-3 text-2xl font-bold">{s.removedLines}</h2>
@@ -130,5 +166,33 @@ async function Trip({ params }: { params: Params }) {
         </section>
       ) : null}
     </AppFrame>
+  );
+}
+
+/** One handover on the trip page. The approve button is a menu only; the API checks the depot and separation of duties. */
+function Handover({ h, canApprove }: { h: HandoverSummary; canApprove: boolean }) {
+  const s = getMessages().trips;
+  const waiting = Boolean(h.owed && !h.owed.approvedBy);
+  return (
+    <li className="rounded-md border-2 border-current p-3">
+      <p className="font-semibold">
+        {h.customer.name} · {s.handoverStatuses[h.status]}
+      </p>
+      <p>
+        {s.balanceLine(h.balance.fullOut, h.balance.soldOutright, h.balance.emptyIn)} · {s.ref} {h.ref} · {showTime(h.openedAt)}
+      </p>
+      {h.owed ? (
+        <p className={waiting ? 'font-semibold' : ''}>
+          {s.owedLine(h.owed.count, h.owed.dueOn)} · {h.owed.approvedBy ? s.owedApproved(h.owed.approvedBy) : s.owedWaiting}
+        </p>
+      ) : null}
+      {h.shortfall ? <p className="font-semibold">{s.shortfallLine(h.shortfall)}</p> : null}
+      {h.disputeNote ? <p className="italic">{h.disputeNote}</p> : null}
+      {canApprove && waiting && h.status === 'open' ? (
+        <div className="mt-2">
+          <ActionForm action={approveOwedAction.bind(null, h.id)} label={s.approveOwed} working={s.approvingOwed} />
+        </div>
+      ) : null}
+    </li>
   );
 }

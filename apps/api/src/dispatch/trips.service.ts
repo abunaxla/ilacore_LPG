@@ -8,6 +8,7 @@ import { recordAudit } from '../events/record-audit.js';
 import { recordEvent, recordEvents } from '../events/record-event.js';
 import type { RequestMeta } from '../http/request.js';
 import type { AuthContext } from '../identity/auth-context.js';
+import { HandoversService } from '../handovers/handovers.service.js';
 import { apiError } from '../identity/errors.js';
 
 /** Most tags accepted in one load or return call (a full truck is well under this). */
@@ -44,7 +45,11 @@ export interface TripSummary {
   openedBy: string;
   openedAt: Date;
   signedAt: Date | null;
-  counts: { loaded: number; needsApproval: number; back: number; stillOut: number };
+  /**
+   * loaded: what the driver signed for. delivered: handed to customers (confirmed). collected: empties picked up
+   * on the round. back: scanned back into the depot. stillOut: on the truck now.
+   */
+  counts: { loaded: number; needsApproval: number; delivered: number; collected: number; back: number; stillOut: number };
 }
 
 export interface TripLine {
@@ -59,6 +64,9 @@ export interface TripLine {
   removedAt: Date | null;
   returnedAt: Date | null;
   returnedState: 'empty' | 'full' | null;
+  deliveredAt: Date | null;
+  /** An empty picked up from a customer on this round (not part of the signed load). */
+  collected: boolean;
 }
 
 interface TripRow {
@@ -77,15 +85,22 @@ interface TripRow {
   loaded: string;
   needs_approval: string;
   back: string;
+  delivered: string;
+  collected: string;
+  on_truck: string;
 }
 
 const TRIPS = `
   SELECT tr.id, tr.depot_id, l.name AS depot_name, tr.driver_id, d.display_name AS driver_name, tr.vehicle_reg,
          tr.status, tr.note, tr.opened_by, o.display_name AS opened_by_name, tr.opened_at, tr.signed_at,
-         (SELECT count(*) FROM trip_lines x WHERE x.trip_id = tr.id AND x.removed_at IS NULL) AS loaded,
+         (SELECT count(*) FROM trip_lines x WHERE x.trip_id = tr.id AND x.removed_at IS NULL AND x.collected_in IS NULL) AS loaded,
          (SELECT count(*) FROM trip_lines x WHERE x.trip_id = tr.id AND x.removed_at IS NULL
             AND x.exception IS NOT NULL AND x.approved_at IS NULL) AS needs_approval,
-         (SELECT count(*) FROM trip_lines x WHERE x.trip_id = tr.id AND x.returned_at IS NOT NULL) AS back
+         (SELECT count(*) FROM trip_lines x WHERE x.trip_id = tr.id AND x.returned_at IS NOT NULL) AS back,
+         (SELECT count(*) FROM trip_lines x WHERE x.trip_id = tr.id AND x.delivered_at IS NOT NULL) AS delivered,
+         (SELECT count(*) FROM trip_lines x WHERE x.trip_id = tr.id AND x.collected_in IS NOT NULL) AS collected,
+         (SELECT count(*) FROM trip_lines x WHERE x.trip_id = tr.id AND x.removed_at IS NULL
+            AND x.returned_at IS NULL AND x.delivered_at IS NULL) AS on_truck
   FROM trips tr
   JOIN locations l ON l.id = tr.depot_id
   JOIN users d ON d.id = tr.driver_id
@@ -93,7 +108,6 @@ const TRIPS = `
 
 function summary(r: TripRow): TripSummary {
   const loaded = Number(r.loaded);
-  const back = Number(r.back);
   return {
     id: r.id,
     depot: { id: r.depot_id, name: r.depot_name },
@@ -104,7 +118,14 @@ function summary(r: TripRow): TripSummary {
     openedBy: r.opened_by_name,
     openedAt: r.opened_at,
     signedAt: r.signed_at,
-    counts: { loaded, needsApproval: Number(r.needs_approval), back, stillOut: r.status === 'out' ? loaded - back : 0 },
+    counts: {
+      loaded,
+      needsApproval: Number(r.needs_approval),
+      delivered: Number(r.delivered),
+      collected: Number(r.collected),
+      back: Number(r.back),
+      stillOut: r.status === 'out' ? Number(r.on_truck) : 0,
+    },
   };
 }
 
@@ -137,7 +158,10 @@ const deviceOf = (actor: AuthContext) => (actor.deviceId ? { deviceId: actor.dev
  */
 @Injectable()
 export class TripsService {
-  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(HandoversService) private readonly handovers: HandoversService,
+  ) {}
 
   /** Drivers who may take a truck out of this depot (the guard checked dispatch.scan there). */
   async drivers(actor: AuthContext, depotId: string): Promise<{ id: string; name: string }[]> {
@@ -194,7 +218,10 @@ export class TripsService {
     });
   }
 
-  async get(actor: AuthContext, tripId: string): Promise<TripSummary & { lines: TripLine[] }> {
+  async get(
+    actor: AuthContext,
+    tripId: string,
+  ): Promise<TripSummary & { lines: TripLine[]; handovers: Awaited<ReturnType<HandoversService['forTrip']>> }> {
     return withTenant(this.pool, actor.tenantId, async (c) => {
       const trip = await this.load(c, tripId);
       if (trip.driver_id !== actor.userId) requireAt(actor, VIEW, trip.depot_id);
@@ -202,9 +229,11 @@ export class TripsService {
         item_id: string; epc: string; serial: string | null; size: string; physical_state: 'empty' | 'full';
         exception: LineException | null; approved_by: string | null; added_by: string; added_at: Date;
         removed_at: Date | null; returned_at: Date | null; returned_state: 'empty' | 'full' | null;
+        delivered_at: Date | null; collected: boolean;
       }>(
         `SELECT x.item_id, x.epc, c.serial, z.name AS size, x.physical_state, x.exception, ap.display_name AS approved_by,
-                ad.display_name AS added_by, x.added_at, x.removed_at, x.returned_at, x.returned_state
+                ad.display_name AS added_by, x.added_at, x.removed_at, x.returned_at, x.returned_state,
+                x.delivered_at, x.collected_in IS NOT NULL AS collected
          FROM trip_lines x
          JOIN cylinders c ON c.item_id = x.item_id
          JOIN cylinder_sizes z ON z.id = c.size_id
@@ -228,7 +257,10 @@ export class TripsService {
           removedAt: l.removed_at,
           returnedAt: l.returned_at,
           returnedState: l.returned_state,
+          deliveredAt: l.delivered_at,
+          collected: l.collected,
         })),
+        handovers: await this.handovers.forTrip(c, tripId),
       };
     });
   }
@@ -255,6 +287,7 @@ export class TripsService {
          JOIN tracked_items i ON i.id = t.item_id
          JOIN cylinders c ON c.item_id = t.item_id
          LEFT JOIN trip_lines live ON live.item_id = t.item_id AND live.removed_at IS NULL AND live.returned_at IS NULL
+                                   AND live.delivered_at IS NULL
          WHERE t.epc = ANY($1::text[])
          FOR UPDATE OF i`,
         [epcs],
@@ -466,7 +499,7 @@ export class TripsService {
       }>(
         `SELECT t.epc, t.item_id, i.custody_kind, i.custody_holder_id, coalesce(l.name, ot.vehicle_reg) AS place,
                 EXISTS (SELECT 1 FROM trip_lines x WHERE x.trip_id = $2 AND x.item_id = t.item_id
-                          AND x.removed_at IS NULL AND x.returned_at IS NULL) AS live_here,
+                          AND x.removed_at IS NULL AND x.returned_at IS NULL AND x.delivered_at IS NULL) AS live_here,
                 EXISTS (SELECT 1 FROM trip_lines x WHERE x.trip_id = $2 AND x.item_id = t.item_id
                           AND x.returned_at IS NOT NULL) AS back_here
          FROM item_tags t
@@ -499,7 +532,7 @@ export class TripsService {
         );
         await c.query(
           `UPDATE trip_lines SET returned_at = now(), returned_by = $3, returned_state = $4
-           WHERE trip_id = $1 AND item_id = ANY($2::uuid[]) AND removed_at IS NULL AND returned_at IS NULL`,
+           WHERE trip_id = $1 AND item_id = ANY($2::uuid[]) AND removed_at IS NULL AND returned_at IS NULL AND delivered_at IS NULL`,
           [tripId, back, actor.userId, physicalState],
         );
         const now = new Date();

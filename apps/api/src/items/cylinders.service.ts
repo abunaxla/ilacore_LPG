@@ -52,6 +52,7 @@ export interface CylinderSummary {
     locationId: string | null;
     locationName: string | null;
     trip: { id: string; vehicleReg: string; depotId: string } | null;
+    customer: { id: string; name: string } | null;
   };
   safetyHold: string;
   safety: string;
@@ -88,13 +89,15 @@ const BASE = `
          i.registered_at, c.serial, c.manufacturer, c.size_id, z.name AS size_name, c.tare_kg, c.safety_hold,
          to_char(c.manufactured_on, 'YYYY-MM-DD') AS manufactured_on,
          CASE c.safety_hold WHEN 'none' THEN 'eligible' ELSE c.safety_hold END AS safety, t.epc,
-         tr.id AS trip_id, tr.vehicle_reg, tr.depot_id AS trip_depot_id
+         tr.id AS trip_id, tr.vehicle_reg, tr.depot_id AS trip_depot_id,
+         cu.id AS customer_id, cu.name AS customer_name
   FROM tracked_items i
   JOIN cylinders c ON c.item_id = i.id
   JOIN cylinder_sizes z ON z.id = c.size_id
   LEFT JOIN locations l ON l.id = i.custody_location_id
   LEFT JOIN item_tags t ON t.item_id = i.id AND t.retired_at IS NULL
-  LEFT JOIN trips tr ON i.custody_kind = 'truck' AND tr.id = i.custody_holder_id`;
+  LEFT JOIN trips tr ON i.custody_kind = 'truck' AND tr.id = i.custody_holder_id
+  LEFT JOIN customers cu ON i.custody_kind IN ('retailer', 'wholesaler', 'sold_outright') AND cu.id = i.custody_holder_id`;
 
 interface BaseRow {
   id: string;
@@ -115,6 +118,8 @@ interface BaseRow {
   trip_id: string | null;
   vehicle_reg: string | null;
   trip_depot_id: string | null;
+  customer_id: string | null;
+  customer_name: string | null;
 }
 
 function summary(r: BaseRow): CylinderSummary {
@@ -130,6 +135,7 @@ function summary(r: BaseRow): CylinderSummary {
       locationId: r.custody_location_id,
       locationName: r.location_name,
       trip: r.trip_id ? { id: r.trip_id, vehicleReg: r.vehicle_reg!, depotId: r.trip_depot_id! } : null,
+      customer: r.customer_id ? { id: r.customer_id, name: r.customer_name! } : null,
     },
     safetyHold: r.safety_hold,
     safety: r.safety,

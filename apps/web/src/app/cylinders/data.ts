@@ -27,6 +27,8 @@ export interface CylinderSummary {
     locationName: string | null;
     /** Set while it is on a truck. */
     trip: { id: string; vehicleReg: string; depotId: string } | null;
+    /** Set while a shop holds it, or after it was sold to one. */
+    customer: { id: string; name: string } | null;
   };
   safetyHold: string;
   safety: 'eligible' | 'quarantined' | 'condemned';
