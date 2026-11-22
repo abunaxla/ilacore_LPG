@@ -18,6 +18,7 @@ import {
   sendCodeAction,
   setBoughtAction,
 } from '../../actions';
+import { SmsDeliveryLine, type SmsDelivery } from '@/components/sms-delivery';
 import { FieldFrame } from '../../field-frame';
 import { PendingHandover } from './pending-handover';
 import { ScanForm } from './scan-form';
@@ -25,7 +26,7 @@ import { SendCodeForm } from './send-code-form';
 
 interface HandoverDetail extends HandoverSummary {
   trip: { id: string; vehicleReg: string; depotId: string };
-  code: { expiresAt: string; freshCodeLeft: boolean } | null;
+  code: { expiresAt: string; freshCodeLeft: boolean; sms: SmsDelivery | null } | null;
   foreignTags: number;
   lines: { itemId: string; epc: string; direction: 'out' | 'in'; soldOutright: boolean; cylinder: { serial: string | null; size: string } }[];
 }
@@ -178,6 +179,7 @@ async function FieldHandover({ params }: { params: Params }) {
           <section aria-labelledby="code" className="mb-6 rounded-md border-2 border-current p-4">
             <h2 id="code" className="mb-2 text-xl font-bold">{f.codeTitle}</h2>
             <p className="mb-3">{f.codeIntro(h.ref, clock(h.code.expiresAt))}</p>
+            <SmsDeliveryLine sms={h.code.sms} href={`/field/handovers/${h.id}`} />
             {h.shortfall ? <p className="mb-3 font-semibold">{f.shortfall(h.shortfall)}</p> : null}
             <ActionForm action={confirmCodeAction.bind(null, h.id)} label={f.confirm} working={f.confirming}>
               <Field name="code" label={f.code} required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" autoFocus />

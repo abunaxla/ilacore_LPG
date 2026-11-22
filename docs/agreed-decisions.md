@@ -95,6 +95,8 @@ Each one links to the document with the detail. Change a decision here first, th
 - **SMS goes through a stand-in** until a provider is chosen: messages are kept and shown on a test screen, not sent.
   Provider chosen (21 Nov 2026): **Africa's Talking**, switched on with `SMS_PROVIDER=africastalking`; the stand-in
   stays the default for development and tests.
+  Delivery reports are shown to the driver and the office (22 Nov 2026). **Shop replies (YES/NO) are deferred**
+  ("skip shop replies for now"): they need a short code; until then the driver records a refusal as a dispute.
   Confirmation in this slice is the **code read to the driver**. Replying YES / NO by SMS needs the provider's
   reply number, so it comes with the provider; until then the driver records a refusal as a dispute.
 - Customers are registered by holders of `customer.manage`, given provisionally to the **finance** role

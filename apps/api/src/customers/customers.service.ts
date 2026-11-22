@@ -10,7 +10,7 @@ import type { RequestMeta } from '../http/request.js';
 import type { AuthContext } from '../identity/auth-context.js';
 import { apiError } from '../identity/errors.js';
 import { hashSecret, verifySecret } from '../identity/hashing.js';
-import { CODE_WINDOW_MS, MAX_CODE_ATTEMPTS, SmsService } from './sms.js';
+import { CODE_WINDOW_MS, deliveryOf, MAX_CODE_ATTEMPTS, SmsService, type SmsDelivery } from './sms.js';
 
 export type CustomerKind = 'retailer' | 'wholesaler';
 
@@ -25,6 +25,8 @@ export interface CustomerSummary {
   phone?: string;
   billedThrough: { id: string; name: string } | null;
   emptiesOwed: number;
+  /** One shop, office only, number not yet checked: what became of the check code's SMS. */
+  checkSms?: SmsDelivery | null;
 }
 
 interface CustomerRow {
@@ -166,7 +168,16 @@ export class CustomersService {
   }
 
   async get(actor: AuthContext, id: string): Promise<CustomerSummary> {
-    return withTenant(this.pool, actor.tenantId, async (c) => this.summary(actor, await this.row(c, id)));
+    return withTenant(this.pool, actor.tenantId, async (c) => {
+      const s = this.summary(actor, await this.row(c, id));
+      if (s.phoneVerified || !canAt(actor, ['customer.manage'], null)) return s;
+      const m = await c.query<Parameters<typeof deliveryOf>[0] & object>(
+        `SELECT status, delivery_status, delivery_reason, delivery_at FROM sms_messages
+       WHERE customer_id = $1 AND purpose = 'phone_check' ORDER BY id DESC LIMIT 1`,
+        [id],
+      );
+      return { ...s, checkSms: deliveryOf(m.rows[0]) };
+    });
   }
 
   /** The shop behind a QR label. */

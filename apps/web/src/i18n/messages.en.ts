@@ -531,6 +531,27 @@ export const en = {
     needsSignal: 'This needs signal. Check the handover again once the signal is back.',
     tryAgain: 'Try again',
   },
+  sms: {
+    delivered: 'The SMS reached the shop’s phone.',
+    sent: 'SMS sent. Its phone has not reported it delivered yet.',
+    notDelivered: (why: string) => `The SMS did not reach the shop’s phone: ${why}. Send a fresh code, or phone the shop.`,
+    checkAgain: 'Check again',
+    // Africa's Talking statuses and reasons, in plain words. Anything else is shown as given.
+    reasons: {
+      AbsentSubscriber: 'the phone is off or out of coverage',
+      Expired: 'the phone was unreachable for too long',
+      Rejected: 'the network refused it',
+      Failed: 'the network could not deliver it',
+      DoNotDisturbRejection: 'the number blocks messages like ours',
+      UserInBlackList: 'the number has blocked our messages',
+      UserDoesNotExist: 'the number does not exist',
+      UserIsInactive: 'the number is not active',
+      UserAccountSuspended: 'the number is suspended',
+      NotNetworkSubscriber: 'the number is not on that network',
+      InsufficientCredit: 'our SMS account has no balance (tell the office)',
+      DeliveryFailure: 'the network could not deliver it',
+    } as Record<string, string>,
+  },
   customers: {
     title: 'Shops',
     nav: 'Shops',

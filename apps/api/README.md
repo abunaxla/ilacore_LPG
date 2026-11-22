@@ -101,6 +101,15 @@ Or run it without `echo` and type the password when asked. Uses `DATABASE_MIGRAT
     `sms_refused` (the number can't take our SMS), `sms_unavailable` (wrong key, no balance: the office fixes it).
   - There is no queue on purpose: a code is only useful while the driver is at the shop. The handheld never queues
     "send the code" with no signal either; it says it needs signal (see apps/web README).
+  - **Delivery reports.** In the Africa's Talking dashboard (SMS → Callback URLs → Delivery Reports) register
+    `https://<api host>/sms/africastalking/delivery/<AT_CALLBACK_TOKEN>`. They don't sign callbacks, so the token in
+    the address is the check; with `AT_CALLBACK_TOKEN` unset, or a wrong token, the address is "not found". Each
+    report updates `sms_messages.delivery_status` / `delivery_reason` (found through `sms_provider_ids`, since the
+    callback carries no tenant); a final word (Success, Failed, Rejected, AbsentSubscriber, Expired) is never
+    overwritten. The driver's handover (`code.sms`) and the office's unchecked shop (`checkSms`) show
+    `stand_in | sent | delivered | not_delivered` with the reason. Needs the API reachable over HTTPS (the VPS).
+  - Shop replies (YES/NO by SMS) are deferred: they need a short code (cost, and codes would come from a number
+    instead of "ILACORE"). A shop's refusal is still recorded by the driver as a dispute.
 - A driver opens a handover from a trip that is out, to a shop with a checked number. Fulls are scanned out (only
   ones on this truck), empties scanned in (ours only; another brand's tag is noted, not counted; a cylinder on a
   truck is refused). Every full needs a cover: an empty back, marked as bought outright, or "empties owed" by a

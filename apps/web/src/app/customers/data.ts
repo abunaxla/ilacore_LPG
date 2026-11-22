@@ -1,8 +1,11 @@
 import 'server-only';
+import type { SmsDelivery } from '@/components/sms-delivery';
 
 export type CustomerKind = 'retailer' | 'wholesaler';
 
 export interface CustomerSummary {
+  /** One shop, office only, number not checked yet. */
+  checkSms?: SmsDelivery | null;
   id: string;
   kind: CustomerKind;
   name: string;

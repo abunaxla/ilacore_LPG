@@ -4,7 +4,7 @@ import { randomInt } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { requireAt } from '../access/require-at.js';
 import { newSmsCode } from '../customers/customers.service.js';
-import { CODE_WINDOW_MS, MAX_CODE_ATTEMPTS, SmsService } from '../customers/sms.js';
+import { CODE_WINDOW_MS, deliveryOf, MAX_CODE_ATTEMPTS, SmsService } from '../customers/sms.js';
 import { PG_POOL } from '../db/database.module.js';
 import { withTenant } from '../db/tenant-transaction.js';
 import { recordAudit } from '../events/record-audit.js';
@@ -612,10 +612,20 @@ export class HandoversService {
       [h.id],
     );
     const foreign = await c.query<{ n: string }>('SELECT count(*) AS n FROM handover_foreign_tags WHERE handover_id = $1', [h.id]);
+    // What became of the latest code SMS, so the driver knows to resend or phone instead of waiting.
+    const sms = h.status === 'awaiting_confirmation'
+      ? await c.query<Parameters<typeof deliveryOf>[0] & object>(
+        `SELECT status, delivery_status, delivery_reason, delivery_at FROM sms_messages
+       WHERE handover_id = $1 AND purpose = 'handover_code' ORDER BY id DESC LIMIT 1`,
+        [h.id],
+      )
+      : null;
     return {
       ...this.summary(h, h.full_out === null ? await this.balance(c, h.id) : this.frozen(h)),
       trip: { id: h.trip_id, vehicleReg: h.vehicle_reg, depotId: h.depot_id },
-      code: h.status === 'awaiting_confirmation' ? { expiresAt: h.code_expires_at, freshCodeLeft: h.codes_sent < 2 } : null,
+      code: h.status === 'awaiting_confirmation'
+        ? { expiresAt: h.code_expires_at, freshCodeLeft: h.codes_sent < 2, sms: deliveryOf(sms?.rows[0]) }
+        : null,
       foreignTags: Number(foreign.rows[0]!.n),
       lines: lines.rows.map((l) => ({ itemId: l.item_id, epc: l.epc, direction: l.direction, soldOutright: l.sold_outright, cylinder: { serial: l.serial, size: l.size } })),
     };

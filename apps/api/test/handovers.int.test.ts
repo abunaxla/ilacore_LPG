@@ -116,6 +116,17 @@ async function addLocation(tenant: string, name: string): Promise<string> {
   });
 }
 
+/** Test value for the delivery-report address; nothing is sent to a provider in tests. */
+const CALLBACK_TOKEN = 'test-callback-token-0123456789abcdef';
+
+/** Posts a delivery report the way Africa's Talking does (form-encoded). */
+async function deliveryReport(token: string, fields: Record<string, string>): Promise<number> {
+  const r = await fetch(`${base}/sms/africastalking/delivery/${token}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields),
+  });
+  return r.status;
+}
+
 let tagCounter = 0;
 const newEpc = () => `E2801170${String(Date.now() % 1e8).padStart(8, '0')}${String(++tagCounter).padStart(8, '0')}`;
 
@@ -193,7 +204,9 @@ beforeAll(async () => {
   );
   handheld = formatDeviceCredential({ tenantId, deviceId, secret });
 
-  Object.assign(process.env, { NODE_ENV: 'test', DATABASE_URL: appUrl, MFA_ENCRYPTION_KEY: Buffer.alloc(32, 9).toString('base64') });
+  Object.assign(process.env, {
+    NODE_ENV: 'test', DATABASE_URL: appUrl, MFA_ENCRYPTION_KEY: Buffer.alloc(32, 9).toString('base64'), AT_CALLBACK_TOKEN: CALLBACK_TOKEN,
+  });
   app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: false });
   configureApp(app);
   await app.listen(0, '127.0.0.1');
@@ -378,6 +391,48 @@ describe('a handover from the truck', () => {
     await call('POST', `/handovers/${id}/out`, { token: driver, body: { epcs: [fulls[4]!.epc] } });
     expect(((await call('POST', `/handovers/${id}/out`, { token: driver, body: { epcs: [fulls[4]!.epc] } })).body.outcomes as { result: string }[])[0]!.result).toBe('already_scanned');
     await call('POST', `/handovers/${id}/cancel`, { token: driver });
+  });
+
+  it('shows the driver what the delivery reports say about the code SMS', async () => {
+    const h = (await call('POST', `/trips/${trip}/handovers`, { token: driver, body: { customerId: shop } })).body.id as string;
+    await call('POST', `/handovers/${h}/out`, { token: driver, body: { epcs: [fulls[4]!.epc] } });
+    await call('POST', `/handovers/${h}/request-confirmation`, { token: driver, body: { acceptShortfall: true } });
+    const sms = async () => ((await call('GET', `/handovers/${h}`, { token: driver })).body.code as { sms: unknown }).sms;
+    expect(await sms()).toMatchObject({ state: 'stand_in' });
+    // As if Africa's Talking had accepted it: what SmsService records after a real send.
+    await withTenant(owner, tenantId, async (c) => {
+      const m = await c.query<{ id: string }>(`UPDATE sms_messages SET status = 'sent', provider_message_id = 'ATXid_test1'
+        WHERE id = (SELECT max(id) FROM sms_messages WHERE handover_id = $1) RETURNING id`, [h]);
+      await c.query(`INSERT INTO sms_provider_ids (provider_message_id, tenant_id, sms_id) VALUES ('ATXid_test1', $1, $2)`, [tenantId, m.rows[0]!.id]);
+    });
+    expect(await sms()).toMatchObject({ state: 'sent' });
+
+    expect(await deliveryReport('wrong-token-0123456789abcdef0123456789', { id: 'ATXid_test1', status: 'Success' })).toBe(404);
+    expect(await sms()).toMatchObject({ state: 'sent' });
+    expect(await deliveryReport(CALLBACK_TOKEN, { id: 'ATXid_test1', status: 'Buffered', phoneNumber: '+254722000001' })).toBe(200);
+    expect(await sms()).toMatchObject({ state: 'sent' });
+    expect(await deliveryReport(CALLBACK_TOKEN, { id: 'ATXid_test1', status: 'AbsentSubscriber' })).toBe(200);
+    expect(await sms()).toMatchObject({ state: 'not_delivered', reason: 'AbsentSubscriber' });
+    // A late report never overwrites the last word; an unknown id is accepted and dropped.
+    expect(await deliveryReport(CALLBACK_TOKEN, { id: 'ATXid_test1', status: 'Sent' })).toBe(200);
+    expect(await sms()).toMatchObject({ state: 'not_delivered' });
+    expect(await deliveryReport(CALLBACK_TOKEN, { id: 'ATXid_unknown', status: 'Success' })).toBe(200);
+    // Close it so the truck can start the next handover.
+    expect((await call('POST', `/handovers/${h}/dispute`, { token: driver, body: { note: 'Phone off' } })).status).toBe(204);
+  });
+
+  it('shows the office whether the number-check SMS was delivered', async () => {
+    const id = await registerShop('Delivery Check Shop', '0722000077');
+    expect((await call('GET', `/customers/${id}`, { cookie: finance })).body.checkSms).toMatchObject({ state: 'stand_in' });
+    await withTenant(owner, tenantId, async (c) => {
+      const m = await c.query<{ id: string }>(`UPDATE sms_messages SET status = 'sent', provider_message_id = 'ATXid_test2'
+        WHERE id = (SELECT max(id) FROM sms_messages WHERE customer_id = $1) RETURNING id`, [id]);
+      await c.query(`INSERT INTO sms_provider_ids (provider_message_id, tenant_id, sms_id) VALUES ('ATXid_test2', $1, $2)`, [tenantId, m.rows[0]!.id]);
+    });
+    expect(await deliveryReport(CALLBACK_TOKEN, { id: 'ATXid_test2', status: 'Success', networkCode: '63902' })).toBe(200);
+    expect((await call('GET', `/customers/${id}`, { cookie: finance })).body.checkSms).toMatchObject({ state: 'delivered' });
+    // Drivers never see the number check.
+    expect((await call('GET', `/customers/${id}`, { token: driver })).body.checkSms).toBeUndefined();
   });
 
   it('closes a handover as unconfirmed when the 15 minutes pass; custody stays with the driver', async () => {

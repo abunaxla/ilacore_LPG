@@ -3,7 +3,7 @@
 | # | Question | Why it matters |
 |---|---|---|
 | 1 | Are there many places on routes with **no network coverage**? | A 15-minute SMS window can't work offline. If no-signal areas are common, an offline confirmation method is needed. |
-| 2 | **SMS provider and cost**: sender ID, shortcode or long number for replies, price per message | At least one SMS per retailer handover |
+| 2 | **SMS replies**: provider settled (Africa's Talking, KES 0.8 per SMS on the basic plan). Still open: a short code for YES/NO replies (shared with keyword about KES 5,800 set-up + KES 2,320/month per AT's 2019 page; codes would then come from a number, not "ILACORE"). Deferred 22 Nov 2026 | Shops can only refuse through the driver until then |
 | 3 | **RFID reader** make and model | Decides whether the field client stays a PWA or moves to native Android, and how the vendor adapter is built |
 | 4 | Current **VAT rate and KRA eTIMS** integration route | Must be verified, never assumed |
 | 5 | Refinements to the **permission matrix** | Adopted as the starting point on 19 Nov 2026; refine as features are built ([matrix](drafts/permission-matrix.md)) |

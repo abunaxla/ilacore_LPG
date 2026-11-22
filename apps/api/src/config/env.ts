@@ -26,6 +26,11 @@ const EnvSchema = z.object({
   AT_API_KEY: z.string().min(1).optional(),
   /** Approved sender ID (e.g. ILACORE). Leave unset to use Africa's Talking's shared sender. */
   AT_SENDER_ID: z.string().min(1).max(11).optional(),
+  /**
+   * Secret part of the delivery-report address given to Africa's Talking (they don't sign callbacks).
+   * At least 32 characters, e.g. openssl rand -hex 24. Unset: delivery reports are refused.
+   */
+  AT_CALLBACK_TOKEN: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/, 'must be 32-128 letters, digits, - or _').optional(),
 }).superRefine((env, ctx) => {
   if (env.SMS_PROVIDER !== 'africastalking') return;
   for (const key of ['AT_USERNAME', 'AT_API_KEY'] as const) {

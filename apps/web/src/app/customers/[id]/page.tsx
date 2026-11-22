@@ -8,6 +8,7 @@ import { errorText, getMessages } from '@/i18n';
 import { requireMe } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { getToken } from '@/lib/session';
+import { SmsDeliveryLine } from '@/components/sms-delivery';
 import { resendCheckAction, verifyPhoneAction } from '../actions';
 import { showPhone, type CustomerSummary } from '../data';
 
@@ -85,6 +86,7 @@ async function Customer({ params, searchParams }: { params: Params; searchParams
         <section aria-labelledby="verify" className="mb-8 max-w-xl rounded-md border-2 border-current p-4">
           <h2 id="verify" className="mb-2 text-2xl font-bold">{c.verifyTitle}</h2>
           <p className="mb-4">{c.verifyIntro}</p>
+          <SmsDeliveryLine sms={shop.checkSms} href={`/customers/${shop.id}`} />
           <ActionForm action={verifyPhoneAction.bind(null, shop.id)} label={c.verify} working={c.verifying}>
             <Field name="code" label={c.code} required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" />
           </ActionForm>
